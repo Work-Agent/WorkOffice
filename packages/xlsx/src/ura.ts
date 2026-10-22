@@ -9,6 +9,7 @@ import { registerCodec, registerConsumer } from './sdk'
 import type {
   AgentProjection,
   CellLike,
+  CellStyle,
   Codec,
   Consumer,
   DecodedDoc,
@@ -20,7 +21,39 @@ import type {
 
 const DOC_TYPE = 'ooxml-xlsx@1' as const
 
+const BUILTIN_FORMATS: Record<number, string> = {
+  0: 'General',
+  1: '0',
+  2: '0.00',
+  3: '#,##0',
+  4: '#,##0.00',
+  9: '0%',
+  10: '0.00%',
+  11: '0.00E+00',
+  12: '# ?/?',
+  13: '# ??/??',
+  14: 'm/d/yy',
+  15: 'd-mmm-yy',
+  16: 'd-mmm',
+  17: 'mmm-yy',
+  18: 'h:mm AM/PM',
+  19: 'h:mm:ss AM/PM',
+  20: 'h:mm',
+  21: 'h:mm:ss',
+  22: 'm/d/yy h:mm',
+  37: '#,##0 ;(#,##0)',
+  38: '#,##0 ;[Red](#,##0)',
+  39: '#,##0.00;(#,##0.00)',
+  40: '#,##0.00;[Red](#,##0.00)',
+  45: 'mm:ss',
+  46: '[h]:mm:ss',
+  47: 'mmss.0',
+  48: '##0.0E+0',
+  49: '@',
+}
+
 interface XlsxDoc {
+  bytes: string
   name: string
   sheets: SheetLike[]
 }
@@ -31,7 +64,8 @@ const parser = new XMLParser({
   parseTagValue: false,
   parseAttributeValue: false,
   trimValues: false,
-  isArray: (name) => ['sheet', 'Relationship', 'si', 'row', 'c'].includes(name),
+  isArray: (name) =>
+    ['sheet', 'Relationship', 'si', 'row', 'c', 'col', 'mergeCell'].includes(name),
 })
 
 function attr(node: unknown, name: string): string {
@@ -82,6 +116,10 @@ function textOfNode(node: unknown): string {
   return ''
 }
 
+function base64Of(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64')
+}
+
 function nameOf(ref: string): string {
   try {
     const url = new URL(ref)
@@ -91,6 +129,72 @@ function nameOf(ref: string): string {
     const name = ref.slice(ref.lastIndexOf('/') + 1)
     return name || 'workbook.xlsx'
   }
+}
+
+function argb(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const hex = value.replace(/^#/, '')
+  if (hex.length === 8) return `#${hex.slice(2)}`
+  if (hex.length === 6) return `#${hex}`
+  return undefined
+}
+
+function parseStyles(xml: string | null): CellStyle[] {
+  if (!xml) return []
+  const parsed = parser.parse(xml) as {
+    styleSheet?: {
+      numFmts?: { numFmt?: unknown[] }
+      fonts?: { font?: unknown[] }
+      fills?: { fill?: unknown[] }
+      cellXfs?: { xf?: unknown[] }
+    }
+  }
+  const sheet = parsed.styleSheet
+  if (!sheet) return []
+  const custom = new Map<number, string>()
+  for (const item of asArray(sheet.numFmts?.numFmt)) {
+    const record = item as Record<string, unknown>
+    const id = Number(attr(record, 'numFmtId'))
+    const code = attr(record, 'formatCode')
+    if (Number.isFinite(id) && code) custom.set(id, decodeXml(code))
+  }
+  const fonts = asArray(sheet.fonts?.font).map((item) => {
+    const record = item as Record<string, unknown>
+    const colorNode = record.color as Record<string, unknown> | undefined
+    return {
+      bold: record.b !== undefined,
+      italic: record.i !== undefined,
+      underline: record.u !== undefined,
+      fontSize: Number(attr(record.sz, 'val')) || undefined,
+      fontFamily: attr(record.name, 'val') || undefined,
+      fontColor: argb(colorNode?.['@_rgb']) ?? argb(colorNode?.['@_val']),
+    } satisfies CellStyle
+  })
+  const fills = asArray(sheet.fills?.fill).map((item) => {
+    const record = item as Record<string, unknown>
+    const pattern = record.patternFill as Record<string, unknown> | undefined
+    const fg = pattern?.fgColor as Record<string, unknown> | undefined
+    const bg = pattern?.bgColor as Record<string, unknown> | undefined
+    return argb(fg?.['@_rgb']) ?? argb(fg?.['@_val']) ?? argb(bg?.['@_rgb']) ?? undefined
+  })
+  return asArray(sheet.cellXfs?.xf).map((item) => {
+    const record = item as Record<string, unknown>
+    const font = fonts[Number(attr(record, 'fontId'))] ?? {}
+    const fill = fills[Number(attr(record, 'fillId'))]
+    const numFmtId = Number(attr(record, 'numFmtId'))
+    const numberFormat = custom.get(numFmtId) ?? BUILTIN_FORMATS[numFmtId]
+    const alignment = record.alignment as Record<string, unknown> | undefined
+    const horizontal = attr(alignment, 'horizontal')
+    return {
+      ...font,
+      ...(fill ? { fillColor: fill } : {}),
+      ...(numberFormat && numberFormat !== 'General' ? { numberFormat } : {}),
+      ...(horizontal === 'center' || horizontal === 'right' || horizontal === 'left'
+        ? { align: horizontal }
+        : {}),
+      ...(attr(alignment, 'wrapText') === '1' ? { wrap: true } : {}),
+    } satisfies CellStyle
+  })
 }
 
 function parseWorkbook(bytes: Uint8Array): SheetLike[] {
@@ -109,6 +213,7 @@ function parseWorkbook(bytes: Uint8Array): SheetLike[] {
   if (!workbookXml) throw new Error('XLSX 缺少 xl/workbook.xml')
   const relsXml = read('xl/_rels/workbook.xml.rels')
   const sharedXml = read('xl/sharedStrings.xml')
+  const styles = parseStyles(read('xl/styles.xml'))
   const workbook = parser.parse(workbookXml) as {
     workbook?: { sheets?: { sheet?: Array<Record<string, unknown>> } }
   }
@@ -147,12 +252,23 @@ function parseWorkbook(bytes: Uint8Array): SheetLike[] {
     const sheetXml = read(path)
     if (!sheetXml) continue
     const parsed = parser.parse(sheetXml) as {
-      worksheet?: { sheetData?: { row?: unknown[] } }
+      worksheet?: {
+        sheetData?: { row?: unknown[] }
+        cols?: { col?: unknown[] }
+        mergeCells?: { mergeCell?: unknown[] }
+      }
     }
     const cells: Record<string, CellLike> = {}
+    const colWidths: Record<string, number> = {}
+    const rowHeights: Record<string, number> = {}
+    const merges: string[] = []
     for (const row of asArray(parsed.worksheet?.sheetData?.row)) {
       const rowRecord = row as Record<string, unknown>
       const rowNumber = Number(attr(rowRecord, 'r')) || 0
+      const heightPt = Number(attr(rowRecord, 'ht'))
+      if (rowNumber && Number.isFinite(heightPt) && heightPt > 0) {
+        rowHeights[String(rowNumber)] = Math.round((heightPt * 96) / 72)
+      }
       let columnIndex = 0
       for (const cellNode of asArray(rowRecord.c)) {
         const cell = cellNode as Record<string, unknown>
@@ -175,13 +291,39 @@ function parseWorkbook(bytes: Uint8Array): SheetLike[] {
           value = Number.isFinite(numeric) ? numeric : rawValue
         }
         if (value === null && formula === undefined) continue
+        const styleIndex = Number(attr(cell, 's'))
+        const style = Number.isFinite(styleIndex) ? styles[styleIndex] : undefined
         cells[address] = {
           value,
           ...(formula !== undefined ? { formula: `=${formula}` } : {}),
+          ...(style && Object.keys(style).length ? { style } : {}),
         }
       }
     }
-    sheets.push({ id: `sheet-${sheetId}`, name, cells })
+    for (const col of asArray(parsed.worksheet?.cols?.col)) {
+      const colRecord = col as Record<string, unknown>
+      const min = Number(attr(colRecord, 'min'))
+      const max = Number(attr(colRecord, 'max')) || min
+      const width = Number(attr(colRecord, 'width'))
+      if (!min || !Number.isFinite(width) || width <= 0) continue
+      const px = Math.max(32, Math.min(480, Math.round(width * 7 + 5)))
+      for (let index = min; index <= max && index < min + 200; index++) {
+        colWidths[columnLabel(index - 1)] = px
+      }
+    }
+    for (const merge of asArray(parsed.worksheet?.mergeCells?.mergeCell)) {
+      const ref = attr(merge, 'ref')
+      if (ref) merges.push(ref)
+    }
+    sheets.push({
+      id: `sheet-${sheetId}`,
+      name,
+      path,
+      cells,
+      ...(merges.length ? { merges } : {}),
+      ...(Object.keys(colWidths).length ? { colWidths } : {}),
+      ...(Object.keys(rowHeights).length ? { rowHeights } : {}),
+    })
   }
   if (sheets.length === 0) throw new Error('XLSX 没有可读工作表')
   return sheets
@@ -255,8 +397,8 @@ const codec: Codec = {
     const sheets = parseWorkbook(raw.bytes)
     return {
       docType: DOC_TYPE,
-      doc: { name: nameOf(ref), sheets } satisfies XlsxDoc,
-      projection: { name: nameOf(ref), sheets },
+      doc: { bytes: base64Of(raw.bytes), name: nameOf(ref), sheets } satisfies XlsxDoc,
+      projection: { bytes: base64Of(raw.bytes), name: nameOf(ref), sheets },
     }
   },
 
@@ -295,6 +437,7 @@ const editorConsumer: Consumer = {
       surface: 'xlsx-viewer',
       page: '',
       data: {
+        bytes: doc.bytes,
         name: doc.name,
         ref,
         version: raw.version,

@@ -4,7 +4,7 @@
 // pptx-render 生成绘制列表，再由我们的 SVG 渲染器画出来。
 
 import { Buffer } from 'buffer'
-import { openPptx } from '@genoffice/pptx-engine'
+import { openPptx, savePptx, type OpenedPptx } from '@genoffice/pptx-engine'
 import { buildRenderSlide, type RenderSlide } from '@genoffice/pptx-render'
 import type { PageSessionInfo } from './env'
 import { renderSlideToSvg } from './render'
@@ -76,7 +76,70 @@ function mimeOf(path: string): string {
   return MIME[ext] ?? 'application/octet-stream'
 }
 
-function mount(data: PptxPageData, slides: RenderSlide[]): void {
+function buildSlides(opened: OpenedPptx): RenderSlide[] {
+  const media = (ref: string): string | undefined => {
+    const path = ref.replace(/^\/+/, '')
+    const file = opened.archive.readBytes(path)
+    if (!file) return undefined
+    return `data:${mimeOf(path)};base64,${btoa(
+      Array.from(file, (b) => String.fromCharCode(b)).join(''),
+    )}`
+  }
+  return opened.deck.slides.map((slide, index) =>
+    buildRenderSlide(slide, opened.deck.size, {
+      fitWidthPx: 960,
+      media,
+      slideNo: index + 1,
+    }),
+  )
+}
+
+interface TextElementLike {
+  id?: string
+  type?: string
+  dirty?: boolean
+  text?: {
+    paragraphs: Array<{ runs?: Array<{ text?: string; [key: string]: unknown }>; [key: string]: unknown }>
+    [key: string]: unknown
+  }
+  children?: TextElementLike[]
+}
+
+function findElement(elements: TextElementLike[], id: string): TextElementLike | null {
+  for (const element of elements) {
+    if (element.id === id) return element
+    if (element.type === 'group' && element.children) {
+      const found = findElement(element.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function elementText(element: TextElementLike): string {
+  if (!element.text) return ''
+  return element.text.paragraphs
+    .map((paragraph) => (paragraph.runs ?? []).map((run) => run.text ?? '').join(''))
+    .join('\n')
+}
+
+function setElementText(element: TextElementLike, value: string): boolean {
+  if (!element.text) return false
+  const template = element.text.paragraphs[0]
+  const templateRun = template?.runs?.[0] ?? { text: '' }
+  element.text.paragraphs = value.split('\n').map((line) => ({
+    ...(template ?? {}),
+    runs: [{ ...templateRun, text: line }],
+  }))
+  element.dirty = true
+  return true
+}
+
+function mount(
+  data: PptxPageData,
+  sessionId: string,
+  initial: OpenedPptx,
+): void {
   root.innerHTML = ''
   const app = document.createElement('div')
   app.className = 'app'
@@ -89,7 +152,7 @@ function mount(data: PptxPageData, slides: RenderSlide[]): void {
   name.title = data.ref
   const badge = document.createElement('span')
   badge.className = 'badge'
-  badge.textContent = '只读预览'
+  badge.textContent = '双击文本编辑'
   const spacer = document.createElement('span')
   spacer.className = 'spacer'
 
@@ -120,6 +183,8 @@ function mount(data: PptxPageData, slides: RenderSlide[]): void {
   app.append(toolbar, body)
   root.append(app)
 
+  let doc = initial
+  let slides = buildSlides(doc)
   let current = 0
   const thumbButtons: HTMLButtonElement[] = []
   for (let i = 0; i < slides.length; i++) {
@@ -135,8 +200,7 @@ function mount(data: PptxPageData, slides: RenderSlide[]): void {
   const select = (index: number): void => {
     if (index < 0 || index >= slides.length) return
     current = index
-    const slide = slides[index]!
-    stage.replaceChildren(renderSlideToSvg(slide))
+    stage.replaceChildren(renderSlideToSvg(slides[index]!))
     counter.textContent = `${index + 1} / ${slides.length}`
     prev.disabled = index === 0
     next.disabled = index === slides.length - 1
@@ -145,10 +209,88 @@ function mount(data: PptxPageData, slides: RenderSlide[]): void {
     }
   }
 
+  const openTextEditor = (element: TextElementLike): void => {
+    const overlay = document.createElement('div')
+    overlay.className = 'text-editor'
+    const panel = document.createElement('div')
+    panel.className = 'text-editor-panel'
+    const title = document.createElement('div')
+    title.className = 'text-editor-title'
+    title.textContent = '编辑文本'
+    const textarea = document.createElement('textarea')
+    textarea.value = elementText(element)
+    const actions = document.createElement('div')
+    actions.className = 'text-editor-actions'
+    const cancel = document.createElement('button')
+    cancel.textContent = '取消'
+    const apply = document.createElement('button')
+    apply.className = 'primary'
+    apply.textContent = '应用并保存'
+    const status = document.createElement('span')
+    status.className = 'text-editor-status'
+    actions.append(status, cancel, apply)
+    panel.append(title, textarea, actions)
+    overlay.append(panel)
+    document.body.append(overlay)
+    textarea.focus()
+    textarea.select()
+
+    const close = (): void => overlay.remove()
+    cancel.addEventListener('click', close)
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close()
+    })
+    apply.addEventListener('click', () => {
+      if (!setElementText(element, textarea.value)) {
+        status.textContent = '该元素没有文本模型'
+        return
+      }
+      apply.disabled = true
+      status.textContent = '保存中…'
+      void (async () => {
+        try {
+          const next = await savePptx(doc)
+          const result = await window.extension.ura.page.saveBytes<{
+            ok: boolean
+            conflict?: unknown
+          }>(sessionId, next)
+          if (!result?.ok) {
+            status.textContent = result?.conflict ? '文件已被外部修改' : '保存失败'
+            apply.disabled = false
+            return
+          }
+          doc = await openPptx(next)
+          slides = buildSlides(doc)
+          close()
+          select(current)
+          window.extension.bus.send({ type: 'dirty', dirty: false })
+        } catch (error) {
+          status.textContent = `保存失败：${error instanceof Error ? error.message : String(error)}`
+          apply.disabled = false
+        }
+      })()
+    })
+  }
+
+  stage.addEventListener('dblclick', (event) => {
+    const target = (event.target as Element | null)?.closest('[data-source-id]')
+    const id = target?.getAttribute('data-source-id')
+    if (!id) return
+    const slide = doc.deck.slides[current] as unknown as {
+      elements: TextElementLike[]
+    }
+    const element = findElement(slide?.elements ?? [], id)
+    if (element?.text) {
+      event.preventDefault()
+      openTextEditor(element)
+    }
+  })
+
   prev.addEventListener('click', () => select(current - 1))
   next.addEventListener('click', () => select(current + 1))
 
   window.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLTextAreaElement) return
     if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
       event.preventDefault()
       select(current - 1)
@@ -175,23 +317,8 @@ async function boot(): Promise<void> {
 
     const bytes = base64ToBytes(data.bytes)
     const opened = await openPptx(bytes)
-    const media = (ref: string): string | undefined => {
-      const path = ref.replace(/^\/+/, '')
-      const file = opened.archive.readBytes(path)
-      if (!file) return undefined
-      return `data:${mimeOf(path)};base64,${btoa(
-        Array.from(file, (b) => String.fromCharCode(b)).join(''),
-      )}`
-    }
-    const slides = opened.deck.slides.map((slide, index) =>
-      buildRenderSlide(slide, opened.deck.size, {
-        fitWidthPx: 960,
-        media,
-        slideNo: index + 1,
-      }),
-    )
-    if (slides.length === 0) throw new Error('演示文稿没有可读幻灯片')
-    mount(data, slides)
+    if (opened.deck.slides.length === 0) throw new Error('演示文稿没有可读幻灯片')
+    mount(data, sessionId, opened)
     window.extension.bus.on((message) => {
       if (message.type === 'theme') {
         applyTheme(message.theme === 'dark' ? 'dark' : 'light')

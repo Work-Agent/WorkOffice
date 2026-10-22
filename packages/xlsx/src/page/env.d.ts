@@ -12,11 +12,18 @@ export interface PageSessionInfo {
   degraded: boolean
 }
 
+export interface PageCommitResult {
+  ok: boolean
+  version?: string
+  conflict?: unknown
+}
+
 export interface ExtensionBridge {
   invoke<T = unknown>(command: string, payload?: unknown): Promise<T>
   ura: {
     page: {
       get<T = unknown>(id: string): Promise<T>
+      saveBytes<T = unknown>(id: string, data: Uint8Array): Promise<T>
       reload<T = unknown>(id: string): Promise<T>
     }
   }

@@ -155,18 +155,39 @@ export interface ParsedDocLike {
 
 export type CellValue = string | number | boolean | null | undefined
 
+export interface CellStyle {
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  fontColor?: string
+  fillColor?: string
+  fontSize?: number
+  fontFamily?: string
+  align?: 'left' | 'center' | 'right'
+  wrap?: boolean
+  numberFormat?: string
+}
+
 export interface CellLike {
   value: CellValue
   formula?: string | undefined
   rawValue?: CellValue
+  style?: CellStyle
 }
 
 export interface SheetLike {
   id: string
   name: string
+  /** ZIP 内的 worksheet 路径（编辑写回用） */
+  path?: string
   cells: Readonly<Record<string, CellLike>>
   gridRows?: number
   gridColumns?: number
   styles?: Readonly<Record<string, unknown>>
+  /** 合并区域，A1:C1 形式 */
   merges?: readonly string[]
+  /** 列宽（px，按 A/B/C 键） */
+  colWidths?: Readonly<Record<string, number>>
+  /** 行高（px，按 1/2/3 键） */
+  rowHeights?: Readonly<Record<string, number>>
 }

@@ -161,6 +161,8 @@ function renderText(
 function renderShape(ctx: Ctx, parent: SVGElement, shape: ShapeRenderNode): void {
   const { box } = shape
   const group = el('g', {
+    'data-source-id': shape.sourceId,
+    'data-node-type': shape.type,
     ...(box.rotationDeg
       ? { transform: `rotate(${box.rotationDeg} ${box.centerX} ${box.centerY})` }
       : {}),

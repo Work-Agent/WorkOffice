@@ -17,6 +17,7 @@ export interface ExtensionBridge {
   ura: {
     page: {
       get<T = unknown>(id: string): Promise<T>
+      saveBytes<T = unknown>(id: string, data: Uint8Array): Promise<T>
       reload<T = unknown>(id: string): Promise<T>
     }
   }

@@ -5934,6 +5934,11 @@ export function App() {
     },
     onToggleTableGridlines: toggleTableGridlines,
     onSave: () => void save(false),
+    onConvert: (format: 'html' | 'md' | 'print') => {
+      if (format === 'html') void exportHtml()
+      else if (format === 'md') void exportMarkdown()
+      else window.print()
+    },
     onSection: (next: SectionSettings) => {
       // layout applies to the cursor's section; the final section's sectPr goes through SaveOptions.section (also drives canvas geometry)
       setSections((prev) =>

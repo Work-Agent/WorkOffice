@@ -20,6 +20,50 @@ export interface DocxHostInput {
 
 type Listener<T> = (value: T) => void
 
+async function saveText(
+  defaultName: string,
+  text: string,
+  mime: string,
+): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const picker = (
+    window as unknown as {
+      showSaveFilePicker?: (options: {
+        suggestedName?: string
+        types?: Array<{ description: string; accept: Record<string, string[]> }>
+      }) => Promise<{
+        name: string
+        createWritable(): Promise<{
+          write(data: string): Promise<void>
+          close(): Promise<void>
+        }>
+      }>
+    }
+  ).showSaveFilePicker
+  if (picker) {
+    try {
+      const handle = await picker({
+        suggestedName: defaultName,
+        types: [{ description: 'Document', accept: { [mime]: [`.${defaultName.split('.').pop() ?? 'txt'}`] } }],
+      })
+      const writable = await handle.createWritable()
+      await writable.write(text)
+      await writable.close()
+      return { ok: true, path: handle.name }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return { ok: false }
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+  const blob = new Blob([text], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = defaultName
+  anchor.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return { ok: true, path: defaultName }
+}
+
 export function installDocxHost(input: DocxHostInput): void {
   const { ura, bus } = window.extension
   const themeListeners = new Set<Listener<'light' | 'dark'>>()
@@ -167,7 +211,29 @@ export function installDocxHost(input: DocxHostInput): void {
     getRecentFiles: async () => [],
     getPathForFile: (file: File) => file.name,
     fetchImage: async (src: string) => src,
-    pickImage: async () => null,
+    pickImage: () =>
+      new Promise<{ base64: string; mime: string; name: string } | null>((resolve) => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/png,image/jpeg,image/gif'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return resolve(null)
+          const reader = new FileReader()
+          reader.onload = () => {
+            const result = String(reader.result ?? '')
+            const comma = result.indexOf(',')
+            resolve({
+              base64: comma >= 0 ? result.slice(comma + 1) : '',
+              mime: file.type || 'image/png',
+              name: file.name,
+            })
+          }
+          reader.onerror = () => resolve(null)
+          reader.readAsDataURL(file)
+        })
+        input.click()
+      }),
     pickAttachments: async () => [],
     addAttachmentPaths: async () => [],
     readAttachment: async () => null,
@@ -178,10 +244,23 @@ export function installDocxHost(input: DocxHostInput): void {
     pickExportImagesTarget: async () => null,
     takeExportPdf: async () => null,
 
-    // 打印 / 导出：先交给浏览器打印，其余保持无害
+    // 打印 / 导出：HTML / Markdown 走浏览器文件保存；PDF 仍交给打印链路
     print: () => window.print(),
     printPdfBuffer: async () => ({ ok: true }),
     saveMergedPdf: async () => ({ ok: true }),
+    exportHtml: async (defaultName: string, html: string) => {
+      const name = defaultName.replace(/\.docx$/i, '.html')
+      return saveText(name, html, 'text/html')
+    },
+    exportMarkdown: async (
+      defaultName: string,
+      markdown: string,
+      images: unknown[],
+    ) => {
+      const name = defaultName.replace(/\.docx$/i, '.md')
+      const result = await saveText(name, markdown, 'text/markdown')
+      return { ...result, imagesDropped: images.length }
+    },
 
     // 关闭 / 菜单 / 上下文菜单：宿主不承载这些 chrome，交给页面自身
     onCloseCheck: () => () => undefined,

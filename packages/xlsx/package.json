@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "fflate": "^0.8.2",
-    "fast-xml-parser": "^5.3.4"
+    "fast-xml-parser": "^5.3.4",
+    "numfmt": "^3.2.6"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

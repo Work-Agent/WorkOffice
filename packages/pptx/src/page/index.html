@@ -183,6 +183,66 @@
         color: var(--muted);
         padding: 40px;
       }
+      .text-editor {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+      }
+      .text-editor-panel {
+        width: min(560px, calc(100vw - 48px));
+        background: var(--panel);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .text-editor-title {
+        font-weight: 600;
+      }
+      .text-editor textarea {
+        width: 100%;
+        min-height: 140px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        padding: 8px;
+        font: inherit;
+        outline: none;
+      }
+      .text-editor-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .text-editor-actions button {
+        height: 28px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .text-editor-actions button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .text-editor-status {
+        flex: 1;
+        color: var(--muted);
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>

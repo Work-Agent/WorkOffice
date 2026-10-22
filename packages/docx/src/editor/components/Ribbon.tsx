@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { createPortal } from 'react-dom'
 import type { Lang } from '@genoffice/i18n'
 
-export type ConvertFormat = 'pdf' | 'html' | 'md' | 'images'
+export type ConvertFormat = 'html' | 'md' | 'print'
 import type {
   ChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -180,6 +180,7 @@ import {
   IconBorderTop,
   IconBullets,
   IconCaret,
+  IconConvert,
   IconColDelete,
   IconColInsertLeft,
   IconColInsertRight,
@@ -273,6 +274,7 @@ interface RibbonProps {
   onFind?: () => void
   onReplace?: () => void
   onSave: () => void
+  onConvert: (format: ConvertFormat) => void
   section: SectionSettings | null
   onSection: (next: SectionSettings) => void
   /** Multi-section documents: index of the cursor's section (0-based); null for single-section */
@@ -718,6 +720,7 @@ function RibbonInner({
   styles,
   docDefaults,
   onSave,
+  onConvert,
   section,
   onSection,
   activeSection,
@@ -3012,6 +3015,50 @@ function RibbonInner({
         ) : tab === 'home' ? (
           <>
 
+
+            <div className="ribbon-group">
+              <div className="ribbon-group-items">
+                <div className="rb-split-wrap">
+                  <button
+                    className={`rb-big${dropdown === 'export' ? ' active' : ''}`}
+                    disabled={!hasDoc}
+                    data-tip={t('ribbonConvertTip')}
+                    aria-expanded={dropdown === 'export'}
+                    onClick={() => setDropdown((v) => (v === 'export' ? null : 'export'))}
+                  >
+                    <span className="rb-big-icon">
+                      <IconConvert size={22} />
+                      <IconCaret />
+                    </span>
+                    <span>{t('ribbonConvert')}</span>
+                  </button>
+                  {dropdown === 'export' && (
+                    <div data-rb-panel="" className="spacing-menu paste-menu" role="menu">
+                      {(
+                        [
+                          ['html', 'ribbonConvertHtml'],
+                          ['md', 'ribbonConvertMarkdown'],
+                          ['print', 'appPrintTitle'],
+                        ] as const
+                      ).map(([format, key]) => (
+                        <button
+                          key={format}
+                          onClick={() => {
+                            setDropdown(null)
+                            onConvert(format)
+                          }}
+                        >
+                          {t(key)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="ribbon-group-label">{t('ribbonConvert')}</div>
+            </div>
+
+            <div className="ribbon-sep" />
 
             {/* ---- Clipboard ---- */}
             <div className="ribbon-group">

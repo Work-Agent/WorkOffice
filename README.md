@@ -9,8 +9,8 @@ codec 与 projection 由本仓库实现，只依赖通用 ZIP/XML 库；GenOffic
 | 插件 | 能力 | 状态 |
 | --- | --- | --- |
 | `@workstudio/plugin-docx` | DOCX 打开、渲染、编辑、字节保存 | 可用 |
-| `@workstudio/plugin-xlsx` | XLSX 工作表/单元格只读浏览 | 可用（只读） |
-| `@workstudio/plugin-pptx` | PPTX 幻灯片只读浏览 | 可用（只读） |
+| `@workstudio/plugin-xlsx` | 工作表/单元格浏览 · 基础值/公式编辑 | 可用 |
+| `@workstudio/plugin-pptx` | 幻灯片浏览 · 文本节点编辑 | 可用 |
 
 ## 为什么不是“直接嵌 GenOffice 应用”
 
@@ -82,8 +82,10 @@ transport bytes
   → agent projection: 按 sheet/row 拼文本
 ```
 
-当前是只读预览；写回需要把“单元格变更”映射成 XLSX 补丁，再走
-`applyCellEditsToXlsx` 或页面会话的二进制写。
+页面支持选中单元格后在公式栏改值/公式；保存时由 `src/page/patch.ts`
+直接改 worksheet 的 `<c>` 节点（inlineStr / 数字 / 布尔 / `<f>`），
+其余 ZIP 部件原样保留，再走 `ura.page.saveBytes`。样式、合并、列宽、
+行高、缓存公式值与数字格式已进入投影；图表、透视、条件格式等仍待补。
 
 ## PPTX：自有 codec + GenOffice 渲染树
 
@@ -100,7 +102,8 @@ transport bytes
 ```
 
 codec 不依赖 GenOffice；页面层使用 GenOffice 的解析与绘制列表，渲染器由
-WorkStudio 自己实现。当前只读。
+WorkStudio 自己实现。双击文本可编辑，保存走 `savePptx` + `ura.page.saveBytes`；
+形状/图片/表格/图表编辑、动画、放映、备注等仍待补。
 
 ## GenOffice 页面层来源
 
@@ -172,6 +175,8 @@ node scripts/install.mjs --target "~/Library/Application Support/WorkStudio/plug
 | --- | --- | --- |
 | AI 入口 | 已从 `src/editor` 删除 Home AI 组、选区气泡、AI 面板、审阅 AI 动作、右键同义/翻译、F7 校对 | 只保留 WorkStudio 助手 |
 | 打开 | 页面会话投递字节；`openDocx` 不再弹 GenOffice 文件框 | 打开入口归资源面板 |
+| 插入图片 | 页面内文件选择器，读为 base64 后插入 | 保持 |
+| 导出 HTML / Markdown | 已恢复“转换”菜单，走浏览器文件保存 | PDF / 图片导出待补 |
 | 保存 | `saveDocx` → `ura.page.saveBytes`，严格版本写 | 保持；补冲突提示与关闭前 flush |
 | 另存为 / 新建 | 适配层暂按“保存当前文档”处理 | 改走 WorkStudio 的页面/工作区命令 |
 | 最近文件 | 返回空 | 删除入口，或改用资源索引 |

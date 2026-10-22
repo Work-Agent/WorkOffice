@@ -121,10 +121,30 @@
       }
       .formula .value {
         flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--fg);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      .formula .value:disabled {
+        color: var(--muted);
+      }
+      .save {
+        height: 26px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--fg);
+        cursor: pointer;
+        font: inherit;
+      }
+      .save:disabled {
+        opacity: 0.45;
+        cursor: default;
       }
       .tabs {
         display: flex;
@@ -198,10 +218,6 @@
       thead th.corner {
         left: 0;
         z-index: 3;
-      }
-      td {
-        width: 110px;
-        min-width: 110px;
       }
       td.num {
         text-align: right;
