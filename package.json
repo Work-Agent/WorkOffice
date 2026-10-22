@@ -1,0 +1,21 @@
+{
+  "name": "workstudio-office-plugins",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WorkStudio Office 插件：自有 codec + GenOffice 页面层",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter './packages/*' build",
+    "build:docx": "pnpm --filter @workstudio/plugin-docx build",
+    "typecheck": "pnpm --filter './packages/*' typecheck",
+    "clean": "pnpm --filter './packages/*' clean",
+    "setup": "node scripts/setup-genoffice.mjs && pnpm install",
+    "install:plugins": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
+    "build:codec": "pnpm --filter './packages/*' build:ura"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

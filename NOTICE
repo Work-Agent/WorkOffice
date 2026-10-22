@@ -1,0 +1,9 @@
+WorkStudio Office Plugins
+Copyright 2026 WorkStudio contributors
+
+This product includes software developed by Genspark AI and the GenOffice
+contributors (https://github.com/genspark-ai/genoffice), licensed under the
+Apache License, Version 2.0.
+
+The GenOffice source is consumed as the `vendor/genoffice` git submodule.
+Its LICENSE and NOTICE files are retained in that submodule.

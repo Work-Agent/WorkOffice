@@ -1,0 +1,48 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@genoffice/agent-core": [
+        "../../vendor/genoffice/packages/agent-core/src/index.ts"
+      ],
+      "@genoffice/agent-core/redact-core": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-core.ts"
+      ],
+      "@genoffice/agent-core/redact-range": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-range.ts"
+      ],
+      "@genoffice/pptx-engine": [
+        "../../vendor/genoffice/packages/pptx-engine/src/index.ts"
+      ],
+      "@genoffice/pptx-engine/background-promote": [
+        "../../vendor/genoffice/packages/pptx-engine/src/background-promote.ts"
+      ],
+      "@genoffice/pptx-engine/chart-workbook": [
+        "../../vendor/genoffice/packages/pptx-engine/src/chart-workbook.ts"
+      ],
+      "@genoffice/pptx-engine/custgeom": [
+        "../../vendor/genoffice/packages/pptx-engine/src/custgeom.ts"
+      ],
+      "@genoffice/pptx-engine/identity": [
+        "../../vendor/genoffice/packages/pptx-engine/src/identity.ts"
+      ],
+      "@genoffice/pptx-engine/table-grid": [
+        "../../vendor/genoffice/packages/pptx-engine/src/table-grid.ts"
+      ],
+      "@genoffice/pptx-render": [
+        "../../vendor/genoffice/packages/pptx-render/src/index.ts"
+      ],
+      "@genoffice/pptx-render/preset-geometry": [
+        "../../vendor/genoffice/packages/pptx-render/src/preset-geometry.ts"
+      ],
+      "@genoffice/zip-gate": [
+        "../../vendor/genoffice/packages/zip-gate/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "vite.config.ts"
+  ]
+}

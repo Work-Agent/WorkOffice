@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PowerPoint 演示文稿</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #e9eaec;
+        --panel: #ffffff;
+        --fg: #27272a;
+        --muted: #71717a;
+        --border: #e4e4e7;
+        --accent: #4f6bed;
+        --accent-soft: #eef1fe;
+      }
+      html[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #141516;
+        --panel: #202124;
+        --fg: #e4e4e7;
+        --muted: #8b8d8e;
+        --border: #2a2d2e;
+        --accent: #6c86f0;
+        --accent-soft: #232a44;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          13px/1.45 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          'Noto Sans',
+          Helvetica,
+          Arial,
+          sans-serif;
+        overflow: hidden;
+      }
+      .boot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: var(--muted);
+      }
+      .boot[data-error='1'] {
+        color: #b91c1c;
+        white-space: pre-wrap;
+        padding: 24px;
+        text-align: center;
+      }
+      .app {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 40px;
+        padding: 0 12px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        flex: none;
+      }
+      .file-name {
+        font-weight: 600;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .badge {
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .nav button {
+        width: 28px;
+        height: 26px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--fg);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .nav button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .counter {
+        min-width: 64px;
+        text-align: center;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      .thumbs {
+        width: 84px;
+        flex: none;
+        overflow: auto;
+        padding: 8px;
+        border-right: 1px solid var(--border);
+        background: var(--panel);
+      }
+      .thumb {
+        width: 100%;
+        height: 46px;
+        margin-bottom: 6px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--bg);
+        color: var(--muted);
+        font: inherit;
+        cursor: pointer;
+        font-variant-numeric: tabular-nums;
+      }
+      .thumb.on {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .stage-wrap {
+        flex: 1;
+        min-width: 0;
+        overflow: auto;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 22px;
+      }
+      .stage {
+        max-width: min(100%, 1180px);
+        width: 100%;
+        background: #fff;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.16);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .slide-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #fff;
+      }
+      .slide-svg text {
+        white-space: pre;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot">正在加载 PowerPoint 演示文稿…</div></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

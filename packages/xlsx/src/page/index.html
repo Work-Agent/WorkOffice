@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excel 表格</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f8;
+        --panel: #ffffff;
+        --fg: #27272a;
+        --muted: #71717a;
+        --border: #e4e4e7;
+        --accent: #4f6bed;
+        --accent-soft: #eef1fe;
+        --head: #f4f4f5;
+        --cell-selected: #dfe6ff;
+      }
+      html[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #1a1c1d;
+        --panel: #202124;
+        --fg: #e4e4e7;
+        --muted: #8b8d8e;
+        --border: #2a2d2e;
+        --accent: #6c86f0;
+        --accent-soft: #232a44;
+        --head: #242627;
+        --cell-selected: #2b3552;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          13px/1.45 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          'Noto Sans',
+          Helvetica,
+          Arial,
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .boot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: var(--muted);
+      }
+      .boot[data-error='1'] {
+        color: #b91c1c;
+        white-space: pre-wrap;
+        padding: 24px;
+        text-align: center;
+      }
+      .app {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 40px;
+        padding: 0 12px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        flex: none;
+      }
+      .file-name {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 320px;
+      }
+      .badge {
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .formula {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 12px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        flex: none;
+      }
+      .formula .address {
+        width: 74px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .formula .value {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        overflow-x: auto;
+        padding: 0 8px;
+        background: var(--head);
+        border-bottom: 1px solid var(--border);
+        flex: none;
+      }
+      .tab {
+        padding: 6px 12px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+        font: inherit;
+      }
+      .tab.on {
+        color: var(--fg);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+      }
+      .grid-wrap {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        background: var(--panel);
+      }
+      table {
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        height: 24px;
+        padding: 0 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 400;
+        text-align: left;
+        vertical-align: middle;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--head);
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      th.row-head {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        width: 48px;
+        min-width: 48px;
+        background: var(--head);
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      thead th.corner {
+        left: 0;
+        z-index: 3;
+      }
+      td {
+        width: 110px;
+        min-width: 110px;
+      }
+      td.num {
+        text-align: right;
+      }
+      td.bool {
+        text-align: center;
+      }
+      td.sel {
+        background: var(--cell-selected);
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
+      }
+      .truncated {
+        padding: 8px 12px;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot">正在加载 Excel 工作簿…</div></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

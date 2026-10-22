@@ -1,0 +1,39 @@
+{
+  "name": "@workstudio/plugin-pptx",
+  "version": "0.1.0",
+  "description": "PPTX 阅读：自有 OOXML codec + GenOffice 渲染树",
+  "author": "work-studio",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ura": "./dist/ura.js"
+  },
+  "workstudio": {
+    "id": "pptx",
+    "label": "PowerPoint 演示文稿",
+    "icon": "presentation",
+    "page": "dist/page/index.html"
+  },
+  "scripts": {
+    "build": "pnpm build:ura && pnpm build:page",
+    "build:ura": "esbuild src/ura.ts --bundle --format=esm --platform=node --target=node22 --external:electron --outfile=dist/ura.js",
+    "build:page": "vite build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "buffer": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "bidi-js": "^1.0.3",
+    "fast-xml-parser": "^5.3.4",
+    "jszip": "^3.10.1",
+    "opentype.js": "^2.0.0"
+  }
+}
