@@ -1,255 +1,96 @@
 # WorkStudio Office 插件
 
-以 WorkStudio 的 **transport / codec / presenter / sidecar / 页面会话** 为骨架。
-codec 与页面数据由本仓库实现，只依赖通用 ZIP/XML 库；GenOffice 只用于
-需要富文本 / 分页 / 幻灯片渲染的页面层。
+DOCX / XLSX / PPTX 三种 WorkStudio 资源页。页面层复用 GenOffice 的
+renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话与
+`saveBytes`。
 
-交互目标与重写边界见 [`docs/editor-interaction-design.md`](./docs/editor-interaction-design.md)；GenOffice 组件复用分析见 [`docs/genoffice-reuse-map.md`](./docs/genoffice-reuse-map.md)；迁移进度见 [`docs/migration-status.md`](./docs/migration-status.md)。
+整体架构、GenOffice 源码分层、Office 功能解构与封装方式：
 
-当前进度：
+→ [`docs/architecture.md`](./docs/architecture.md)
 
-| 插件 | 能力 | 状态 |
+## 插件
+
+| 包 | 页面 | 说明 |
 | --- | --- | --- |
-| `@workstudio/plugin-docx` | DOCX 打开、渲染、编辑、字节保存 | 可用 |
-| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer：Ribbon / 对话框 / 网格 / 公式栏 / 撤销 / 保存 | 可用（AI UI 已移除） |
-| `@workstudio/plugin-pptx` | GenOffice Slides renderer：Ribbon / 画布 / 原位文本 / 变换 / 幻灯片与节 / 表格样式 / 图表数据与配色 / 图片裁剪与填充 / 动画 / 录音旁白 / 手工脱敏 / 母版编辑 / 放映 / 演示者视图 / PDF / 跨窗口剪贴板 / 保存 | 可用（观众窗口为独立 Document PiP 窗口） |
+| `@workstudio/plugin-docx` | GenOffice Docs 编辑器 fork | 文本、分页、Ribbon、审阅、打印/导出 |
+| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer | Ribbon、Univer 网格、公式栏、格式、查找、筛选、透视、图表 |
+| `@workstudio/plugin-pptx` | GenOffice Slides renderer | Konva 画布、原位文本、变换、幻灯片/节、表格/图表、媒体、动画、母版、放映、PDF |
 
-> 重构进行中：XLSX / PPTX 均已切换到 GenOffice renderer、通过 renderer typecheck，并已删除 AI 代码。
-
-## 插件契约
-
-三个包都是标准 WorkStudio 插件包：
-
-```json
-{
-  "name": "@workstudio/plugin-docx",
-  "type": "module",
-  "exports": { "./ura": "./dist/ura.js" },
-  "workstudio": {
-    "id": "docx",
-    "label": "Word 文档",
-    "icon": "file-text",
-    "page": "dist/page/index.html"
-  }
-}
-```
-
-`dist/ura.js` 是主进程注册入口，模块求值时调用新版 SDK：
+三个插件都注册：
 
 ```ts
-registerCodec(codec)        // (transport, mime) → 文档
-registerPresenter(presenter) // (transport, mime, codec) → 页面
-registerSidecar(provider)    // (transport, mime, codec) → agent 文本
+registerCodec(codec)
+registerPresenter(presenter)
+registerSidecar(sidecar)
 ```
 
-每个插件声明三个键：
+页面只拿页面会话 id 和 presenter 投递的字节；保存统一走
+`ura.page.saveBytes`，页面不碰路径，也没有 Node 能力。
 
-| 注册面 | 键 |
-| --- | --- |
-| codec | `{ transport: '*', mime: MIME.docx }` |
-| presenter | `{ transport: '*', mime: MIME.docx, codec: 'docx' }` |
-| sidecar | `{ transport: '*', mime: MIME.docx, codec: 'docx' }` |
+## 仓库结构
 
-MIME 由来源给出：`file` transport 按扩展名映射，`http(s)` 按响应
-`Content-Type`。codec 不再声明 `hints` 或 `docType`；格式身份就是
-`codec.id`。
-
-## 为什么不是“直接嵌 GenOffice 应用”
-
-GenOffice 是完整 Electron 应用：文档身份是文件路径，打开/保存/菜单/原生对话框
-都由它自己的主进程和 preload 承担。WorkStudio 的交互模型不同：
-
-- 文档身份是 URA 统一标识，页面只拿页面会话 id 和 presenter 投递的数据；
-- 页面没有 Node、没有裸 IPC，只能走白名单命令；
-- 保存统一走 `ura.page.saveBytes`，页面会话按资源键串行写入；
-- 标签、脏态、主题、侧栏、文件选择归 WorkStudio 壳层。
-
-因此这里 **不引入 GenOffice 的 main / preload**，也不把它的 App 当黑盒：
-
-1. **codec / presenter / sidecar 自有**：DOCX/XLSX 用 `fflate` /
-   `fast-xml-parser` 读 OOXML，不依赖 `@genoffice/*`；XLSX 页面使用
-   Univer（与 GenOffice Sheets 同一套 `preset-sheets-core`）；
-2. Docs 页面层 **fork 到 `packages/docx/src/editor`**，由我们持有并改造；
-3. `packages/docx/src/page` 是 WorkStudio 页面入口与宿主适配层，只把
-   `window.desktop` 语义映射到页面会话。
-
-页面层已经按 Studio 的逻辑裁过：
-
-- 移除 Home 的 Genspark AI 组（AI 总结 / 润色 / 排版 / 思维导图）；
-- 移除选区浮出的“AI 修改”气泡；
-- 移除右侧 AI 面板挂载点；
-- 移除审阅里的 AI 改写 / AI 翻译 / AI 评论 / AI 修订入口；
-- 移除右键菜单的 AI 同义 / AI 翻译，以及 F7 AI 校对入口；
-- 移除 AI 面板状态、选区 AI 队列与对应宿主依赖。
-
-后续页面改造（文件菜单、打开/保存、最近文件、导出、项目历史）都在
-`src/editor` 内完成，不再依赖 GenOffice 的宿主代码。
-
-## DOCX：复用 GenOffice 编辑器壳
-
-```
-WorkStudio file transport
-        │  bytes + version + mime
-        ▼
-DOCX codec（自有 OOXML 解析）
-        │  decoded: { doc: {text,name}, anchorMap: text, outline }
-        ├── sidecar ──► 纯文本（AI 读取 / grep）
-        └── presenter ─► page data: { bytes, name, ref, version }
-                                   │
-                                   ▼
-                         DOCX 页面（GenOffice Docs 渲染器）
-                                   │  编辑后重建 DOCX 字节
-                                   ▼
-                     window.extension.ura.page.saveBytes(session, bytes)
-                                   │
-                                   ▼
-                     PageSessions → Ura.write → FileTransport
+```text
+packages/
+├─ docx/
+│  └─ src/{page,editor,shared,ura.ts}
+├─ xlsx/
+│  └─ src/{editor,shared,ura.ts,ura-types.ts}
+├─ pptx/
+│  └─ src/{editor,shared,ura.ts}
+├─ vendor/genoffice/          # sparse checkout 的 GenOffice 源码
+├─ scripts/
+│  ├─ setup-genoffice.mjs
+│  ├─ install.mjs
+│  └─ verify-contract.mjs
+└─ docs/architecture.md       # 唯一架构文档
 ```
 
-- **transport**：沿用 WorkStudio 的 `file://` 来源；插件不碰文件系统。
-- **codec**：自有 OOXML 解析生成文本与大纲；`anchorMap` 供 grep / locate。
-- **sidecar**：agent 得到纯文本；页面保存后 agent 重新读取同一份内容。
-- **presenter**：页面数据只包含会话所需的字节与元数据。
-- **页面保存**：整篇 DOCX 字节走 `saveBytes`；页面会话返回 `{ ok, version }`，
-  按资源键串行写入，后写覆盖先写。GenOffice 的“写路径”交互在这里不存在。
+XLSX / PPTX 的 `src/editor` 是从 GenOffice 对应 renderer fork 的页面层；
+`workstudio-host.ts` 是唯一的宿主适配层；`workstudio-save.ts`（XLSX）
+负责保存请求到 `xlsx-gateway` 的映射。
 
-## XLSX：Univer 网格 + 自有 codec
-
-XLSX 页面与 GenOffice Sheets 使用同一套交互内核：
-
-```
-transport bytes
-  → xlsx codec（fflate + fast-xml-parser 读 workbook/sharedStrings/worksheet）
-  → decoded: { doc: { name, sheets }, anchorMap: sheet/cell 文本 }
-  → page data: { bytes, name, ref, version, sheets }
-  → Univer preset-sheets-core
-      选择 / 单元格内编辑 / 公式栏 / 剪贴板 / 撤销 / 工作表标签 / 右键菜单
-  → sidecar: 按 sheet/row 拼文本
-```
-
-页面负责：
-
-- 把 codec 快照装载为 Univer workbook；
-- 把 Univer 当前快照与打开时基线逐格比较，生成最小 `CellEdit`；
-- 保存时由 `src/page/patch.ts` 直接改 worksheet 的 `<c>` 节点
-  （inlineStr / 数字 / 布尔 / `<f>`），其余 ZIP 部件原样保留，再走
-  `ura.page.saveBytes`；
-- 主题、脏态、保存按钮、WorkStudio 页面会话。
-
-当前写回边界：**单元格值 / 公式**。格式、合并、行高列宽、插入删除行列
-等命令在页面命令层被拦截并撤销，避免“改了但保存丢失”；待 ChangePlan /
-`xlsx-gateway` 写入接入后逐项开放。
-
-## PPTX：自有 codec + GenOffice 渲染树
-
-PPTX 也分成两层：
-
-```
-transport bytes
-  → pptx codec（fflate 解 ppt/slides/slideN.xml，抽文本/页数）
-  → decoded: { doc: { name, slides }, anchorMap: 幻灯片文本, outline }
-  → page data: { bytes, name, ref, version, slideCount }
-  → 页面层：@genoffice/pptx-engine openPptx
-             @genoffice/pptx-render buildRenderSlide
-             自有 SVG 渲染器（形状/图片/表格/图表/文本）
-  → 幻灯片导航（上一页 / 下一页 / 缩略序号）
-```
-
-codec 不依赖 GenOffice；页面层使用 GenOffice 的解析与绘制列表，渲染器由
-WorkStudio 自己实现。双击文本可编辑，保存走 `savePptx` + `ura.page.saveBytes`；
-形状/图片/表格/图表编辑、动画、放映、备注等仍待补。
-
-## GenOffice 页面层来源
-
-官方 GenOffice 没有发布到 npm：`packages/*` 的 `package.json` 都是
-`private: true`，`npm view @genoffice/docx-engine` 为 404。  
-因此 codec 不依赖它；只有 DOCX 页面层 fork 需要官方源码。
-
-仓库用 git submodule 固定官方源码，但只稀疏检出页面层用到的 13 个包：
-
-```
-vendor/genoffice   →  https://github.com/genspark-ai/genoffice
-  只取 packages/{agent-core,ai-provider,docx-engine,electron-utils,font-metrics,
-                i18n,pptx-engine,pptx-ops,pptx-render,project-store,ui,
-                xlsx-gateway,zip-gate}
-```
-
-- `packages/docx/src/editor` 是从 `apps/docs` fork 下来的页面层，不再需要 `apps/*`；
-- 构建时 Vite 插件把页面层里的 `@genoffice/*` 映射到 `vendor/genoffice/packages/*`；
-- 发布产物 `dist/ura.js` 与 `dist/page` 都是自包含的，不把 `vendor/` 或任何
-  `@genoffice/*` 包带进插件依赖；
-- 更新 GenOffice：改 submodule 指向的 commit，再跑一次 `node scripts/setup-genoffice.mjs`。
-
-如果以后要彻底去掉 `vendor/`，只有两条路：改用第三方已发布的 GenOffice
-封装包，或我们发布自己的 `@workstudio/genoffice-*` 构建产物。
-
-## 构建
+## 开发
 
 ```bash
-# 首次：稀疏拉取官方 GenOffice 子模块（只取页面层用到的包）
-node scripts/setup-genoffice.mjs
-
-pnpm install
-pnpm build          # codec + 页面
-pnpm verify         # 校验注册面是否符合 WorkStudio 契约
-# 或只构建自有 codec（不需要 GenOffice 子模块）
-pnpm build:codec
+pnpm setup          # sparse checkout GenOffice + 安装依赖
+pnpm typecheck      # docx / xlsx / pptx，包含 renderer
+pnpm build          # codec + 页面 bundle
+pnpm verify         # 校验 codec / presenter / sidecar 契约
 ```
 
-产物：
-
-```
-packages/docx/dist/
-  ura.js              # 主进程注册入口（ESM）
-  page/index.html     # 插件页面
-  page/assets/…       # GenOffice 渲染器、字体、worker
-```
-
-## 接入 WorkStudio
-
-WorkStudio 侧需要四个接缝（见 `docs/workstudio-integration.md`）：
-
-1. `file` transport 按扩展名给出 OOXML MIME；`http(s)` 按 `Content-Type`；
-2. 页面会话支持 `saveBytes`（二进制整篇写回）与 `{ ok, version }` 提交结果；
-3. `app://page` 只编码路径段、保留斜杠，插件页的相对资源才能解析；
-4. 宿主装载外部插件前注入 `globalThis.__workstudioSdk` 注册面。
+单独构建：
 
 ```bash
-pnpm build && pnpm verify
+pnpm build:docx
+pnpm build:codec    # 只构建 ura.js
+```
 
-# 方式一：复制进 WorkStudio 内置插件目录，随应用构建分发
+安装到 WorkStudio：
+
+```bash
+# 内置插件目录（随 WorkStudio 构建分发）
 pnpm install:plugins
 
-# 方式二：安装到用户插件目录（必须位于 plugins/node_modules 下）
+# 用户插件目录
 node scripts/install.mjs \
   --target "~/Library/Application Support/WorkStudio/plugins/node_modules"
-
-# 方式三：在 WorkStudio 的 plugins.md 里声明本地来源（原地加载）
-# - /absolute/path/to/OfficePlugin/packages/docx
-# - /absolute/path/to/OfficePlugin/packages/xlsx
-# - /absolute/path/to/OfficePlugin/packages/pptx
 ```
+
+## 运行时约束
+
+- 页面字节只通过 `ura.page.saveBytes` 写回；
+- 模型修改必须走 GenOffice 的操作层（PPTX `runTxn`、XLSX gateway/Univer mutation、DOCX transaction）；
+- XLSX 保存使用完整 `planCellEditsToXlsx` 参数，不能调用会丢字段的旧包装；
+- PPTX 保存后重新 `openPptx(bytes)`，刷新元素 id 与字节锚点；
+- 页面不依赖 AI 包；XLSX / PPTX 的 AI 代码已删除。
+
+## 已知边界
+
+- DOCX 仍需定期同步 GenOffice Docs 上游，并补齐部分 WorkStudio 系统命令；
+- PPTX 观众窗口是独立的 Document PiP 窗口，可手动拖到第二显示器；自动全屏/交换显示器需要宿主提供 screen API；
+- XLSX 大文件/公式流式加载仍按页面内策略处理。
 
 ## 许可
 
 插件代码 Apache-2.0；GenOffice 源码与引擎遵循其 Apache-2.0 许可，见
 `NOTICE` 与 `vendor/genoffice/LICENSE`。
-
-## 页面层改造清单（DOCX）
-
-| 区域 | 现状 | 目标 |
-| --- | --- | --- |
-| AI 入口 | 已从 `src/editor` 删除 Home AI 组、选区气泡、AI 面板、审阅 AI 动作、右键同义/翻译、F7 校对 | 只保留 WorkStudio 助手 |
-| 打开 | 页面会话投递字节；`openDocx` 不再弹 GenOffice 文件框 | 打开入口归资源面板 |
-| 插入图片 | 页面内文件选择器，读为 base64 后插入 | 保持 |
-| 导出 HTML / Markdown | 已恢复“转换”菜单，走浏览器文件保存 | PDF / 图片导出待补 |
-| 保存 | `saveDocx` → `ura.page.saveBytes`，页面会话串行写入 | 保持；补关闭前 flush |
-| 另存为 / 新建 | 适配层暂按“保存当前文档”处理 | 改走 WorkStudio 的页面/工作区命令 |
-| 最近文件 | 返回空 | 删除入口，或改用资源索引 |
-| 导出 / 打印 / PDF | 多数为 no-op | 明确能力位；未实现则不暴露入口 |
-| 项目历史 / 附件 / Zotero | 适配层 no-op | 从页面层删除 |
-| 原生菜单 | 不承载 | 保留 Ribbon，菜单命令由壳层决定 |
-| 脏态 | 输入事件上报 + 保存后清零 | 关闭标签前的保存策略由壳层接管 |
-
-这些改造都在 `packages/docx/src/editor` 内完成，不再通过运行时
-`window.desktop` 兜底；`src/page/host.ts` 只保留页面会话必须的几个入口。
