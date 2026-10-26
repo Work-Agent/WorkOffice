@@ -12,7 +12,7 @@ codec 与页面数据由本仓库实现，只依赖通用 ZIP/XML 库；GenOffic
 | --- | --- | --- |
 | `@workstudio/plugin-docx` | DOCX 打开、渲染、编辑、字节保存 | 可用 |
 | `@workstudio/plugin-xlsx` | GenOffice Sheets renderer：Ribbon / 对话框 / 网格 / 公式栏 / 撤销 / 保存 | 可用（AI UI 已移除） |
-| `@workstudio/plugin-pptx` | GenOffice Slides renderer：Ribbon / 画布 / 原位文本 / 变换 / 幻灯片与节 / 表格样式 / 图表数据与配色 / 图片裁剪与填充 / 动画 / 录音旁白 / 手工脱敏 / 放映 / 演示者视图 / PDF / 跨窗口剪贴板 / 保存 | 可用（第二显示器外部观众窗口待接入） |
+| `@workstudio/plugin-pptx` | GenOffice Slides renderer：Ribbon / 画布 / 原位文本 / 变换 / 幻灯片与节 / 表格样式 / 图表数据与配色 / 图片裁剪与填充 / 动画 / 录音旁白 / 手工脱敏 / 母版编辑 / 放映 / 演示者视图 / PDF / 跨窗口剪贴板 / 保存 | 可用（第二显示器外部观众窗口待接入） |
 
 > 重构进行中：XLSX / PPTX 均已切换到 GenOffice renderer、通过 renderer typecheck，并已删除 AI 代码。
 

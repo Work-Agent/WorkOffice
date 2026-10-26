@@ -22,9 +22,11 @@ import {
   getSlideLinks,
   getSlideNotes,
   getSlideTransition,
+  listMasterParts,
   listSlideLayouts,
   materializeSlide,
   openPptx,
+  parseMasterPart,
   readHeaderFooter,
   savePptx,
   type OpenedPptx,
@@ -110,6 +112,10 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
   const redoStack: Uint8Array[] = []
   let transformPreview = false
   let elementClipboard: any[] | null = null
+  let masterPath: string | null = null
+  let masterSlide: any = null
+  let masterItems: any[] = []
+  const masterParsed = new Map<string, any>()
   const openedHandlers = new Set<(result: any) => void>()
   const historyHandlers = new Set<(state: { canUndo: boolean; canRedo: boolean }) => void>()
   const deckHandlers = new Set<(state: any) => void>()
@@ -1980,10 +1986,137 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     return { slide: rendered, sourceId }
   }
 
-  api.audienceNav = async () => null
+  api.presenterStart = async () => ({ audience: false })
+  api.presenterEnd = async () => {}
+  api.presenterSync = () => {}
+  api.presenterInk = () => {}
+  api.presenterSwap = async () => false
+  api.audienceNav = () => {}
   api.audienceReady = async () => null
+  api.onShowSync = () => () => {}
+  api.onShowInk = () => () => {}
+  api.onAudienceNav = () => () => {}
   api.localGeneratePage = async () => null
   api.landGeneratedPages = async () => null
+
+  const renderMasterPart = (slide: any): RenderSlide =>
+    buildRenderSlide(slide, opened.deck.size, {
+      fitWidthPx: FIT_WIDTH,
+      media: (ref: string) => {
+        const path = ref.replace(/^\/+/, '')
+        const file = opened.archive.readBytes(path)
+        if (!file) return undefined
+        return `data:${mimeOf(path)};base64,${Buffer.from(file).toString('base64')}`
+      },
+    })
+
+  const runMasterEdit = async (ops: any[]): Promise<RenderSlide | null> => {
+    if (!masterPath) return null
+    if (!masterSlide) masterSlide = masterParsed.get(masterPath) ?? parseMasterPart(opened.archive, masterPath)
+    if (!masterSlide) return null
+    const result = runTxn(opened, { ops, parts: new Map([[masterPath, masterSlide]]) })
+    if (!result.applied) {
+      console.warn('[pptx] master transaction rejected', JSON.stringify(result.failures))
+      return null
+    }
+    dirty = true
+    window.extension.bus.send({ type: 'dirty', dirty: true })
+    const rendered = renderMasterPart(masterSlide)
+    masterItems = masterItems.map((item) =>
+      item.partPath === masterPath ? { ...item, slide: rendered } : item,
+    )
+    return rendered
+  }
+
+  api.masterEnter = async () => {
+    const parts = listMasterParts(opened.archive)
+    masterParsed.clear()
+    masterItems = parts.flatMap((info) => {
+      const parsed = parseMasterPart(opened.archive, info.partPath)
+      if (!parsed) return []
+      masterParsed.set(info.partPath, parsed)
+      return [{ ...info, slide: renderMasterPart(parsed) }]
+    })
+    const first = masterItems[0]
+    masterPath = first?.partPath ?? null
+    masterSlide = masterPath ? masterParsed.get(masterPath) : null
+    return { items: masterItems }
+  }
+
+  api.masterOpen = async (partPath: string) => {
+    const parsed = parseMasterPart(opened.archive, partPath)
+    if (!parsed) return null
+    masterPath = partPath
+    masterSlide = parsed
+    masterParsed.set(partPath, parsed)
+    return renderMasterPart(parsed)
+  }
+
+  api.masterClose = async () => {
+    masterPath = null
+    masterSlide = null
+    masterItems = []
+    masterParsed.clear()
+    slides = buildSlides(opened, FIT_WIDTH)
+    notifyDeck()
+    return slides
+  }
+
+  api.masterEditText = async (op: any) =>
+    runMasterEdit([
+      {
+        op: 'setText',
+        target: { part: masterPath, el: op.sourceId },
+        paragraphs: op.paragraphs,
+      },
+    ])
+
+  api.masterEditTransform = async (op: any) =>
+    runMasterEdit([
+      {
+        op: 'setTransform',
+        target: { part: masterPath, el: op.sourceId },
+        box: {
+          x: toEmu(op.xPx, op.fitWidthPx),
+          y: toEmu(op.yPx, op.fitWidthPx),
+          cx: toEmu(op.wPx, op.fitWidthPx),
+          cy: toEmu(op.hPx, op.fitWidthPx),
+        },
+        rotDeg: op.rotationDeg,
+      },
+    ])
+
+  api.masterEditFill = async (op: any) => {
+    const fill =
+      typeof op.fill === 'string'
+        ? op.fill
+        : {
+            stops: op.fill.gradient.stops,
+            ...(op.fill.gradient.path
+              ? { path: op.fill.gradient.path }
+              : { angle: Math.round((op.fill.gradient.angleDeg ?? 0) * 60000) }),
+          }
+    return runMasterEdit([
+      { op: 'setFill', target: { part: masterPath, el: op.sourceId }, fill },
+    ])
+  }
+
+  api.masterEditStroke = async (op: any) =>
+    runMasterEdit([
+      {
+        op: 'setStroke',
+        target: { part: masterPath, el: op.sourceId },
+        stroke: op.stroke
+          ? {
+              color: op.stroke.color,
+              widthEmu: Math.round(op.stroke.widthPt * EMU_PER_PT),
+            }
+          : null,
+      },
+    ])
+
+  api.masterDeleteElement = async (op: any) =>
+    runMasterEdit([{ op: 'deleteElement', target: { part: masterPath, el: op.sourceId } }])
 
   api.applyTxn = async (op: any) => {
     const result = runTxn(opened, {
