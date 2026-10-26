@@ -22,10 +22,13 @@ const SPARSE_PATHS = [
   'packages/electron-utils',
   'packages/font-metrics',
   'packages/i18n',
+  'packages/pipelines',
   'packages/pptx-engine',
+  'packages/pptx-ops',
   'packages/pptx-render',
   'packages/project-store',
   'packages/ui',
+  'packages/xlsx-gateway',
   'packages/zip-gate',
 ]
 

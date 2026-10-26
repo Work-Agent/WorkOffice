@@ -4,13 +4,17 @@
 codec 与页面数据由本仓库实现，只依赖通用 ZIP/XML 库；GenOffice 只用于
 需要富文本 / 分页 / 幻灯片渲染的页面层。
 
+交互目标与重写边界见 [`docs/editor-interaction-design.md`](./docs/editor-interaction-design.md)；GenOffice 组件复用分析见 [`docs/genoffice-reuse-map.md`](./docs/genoffice-reuse-map.md)；迁移进度见 [`docs/migration-status.md`](./docs/migration-status.md)。
+
 当前进度：
 
 | 插件 | 能力 | 状态 |
 | --- | --- | --- |
 | `@workstudio/plugin-docx` | DOCX 打开、渲染、编辑、字节保存 | 可用 |
-| `@workstudio/plugin-xlsx` | 工作表/单元格浏览 · 基础值/公式编辑 | 可用 |
-| `@workstudio/plugin-pptx` | 幻灯片浏览 · 文本节点编辑 | 可用 |
+| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer：Ribbon / 对话框 / 网格 / 公式栏 / 撤销 / 保存 | 可用（AI UI 已移除） |
+| `@workstudio/plugin-pptx` | GenOffice Slides renderer：Ribbon / 画布 / 原位文本 / 变换 / 幻灯片 / 表格图表 / 图片媒体 / 动画 / 放映 / 演示者视图 / PDF / 跨窗口剪贴板 / 保存 | 可用（第二显示器外部观众窗口待接入） |
+
+> 重构进行中：XLSX / PPTX 均已切换到 GenOffice renderer；AI UI 已移除，AI 代码清理与高级编辑能力仍在收尾。
 
 ## 插件契约
 
@@ -63,7 +67,8 @@ GenOffice 是完整 Electron 应用：文档身份是文件路径，打开/保�
 因此这里 **不引入 GenOffice 的 main / preload**，也不把它的 App 当黑盒：
 
 1. **codec / presenter / sidecar 自有**：DOCX/XLSX 用 `fflate` /
-   `fast-xml-parser` 读 OOXML，不依赖 `@genoffice/*`；
+   `fast-xml-parser` 读 OOXML，不依赖 `@genoffice/*`；XLSX 页面使用
+   Univer（与 GenOffice Sheets 同一套 `preset-sheets-core`）；
 2. Docs 页面层 **fork 到 `packages/docx/src/editor`**，由我们持有并改造；
 3. `packages/docx/src/page` 是 WorkStudio 页面入口与宿主适配层，只把
    `window.desktop` 语义映射到页面会话。
@@ -108,24 +113,32 @@ DOCX codec（自有 OOXML 解析）
 - **页面保存**：整篇 DOCX 字节走 `saveBytes`；页面会话返回 `{ ok, version }`，
   按资源键串行写入，后写覆盖先写。GenOffice 的“写路径”交互在这里不存在。
 
-## XLSX：只复用解析引擎，页面自己画
+## XLSX：Univer 网格 + 自有 codec
 
-XLSX 不走 GenOffice 的 Univer 外壳，也不依赖 GenOffice 的
-`xlsx-gateway`：
+XLSX 页面与 GenOffice Sheets 使用同一套交互内核：
 
 ```
 transport bytes
   → xlsx codec（fflate + fast-xml-parser 读 workbook/sharedStrings/worksheet）
   → decoded: { doc: { name, sheets }, anchorMap: sheet/cell 文本 }
   → page data: { bytes, name, ref, version, sheets }
-  → WorkStudio 网格页（标签 / 选区 / 公式栏 / 滚动）
+  → Univer preset-sheets-core
+      选择 / 单元格内编辑 / 公式栏 / 剪贴板 / 撤销 / 工作表标签 / 右键菜单
   → sidecar: 按 sheet/row 拼文本
 ```
 
-页面支持选中单元格后在公式栏改值/公式；保存时由 `src/page/patch.ts`
-直接改 worksheet 的 `<c>` 节点（inlineStr / 数字 / 布尔 / `<f>`），
-其余 ZIP 部件原样保留，再走 `ura.page.saveBytes`。样式、合并、列宽、
-行高、缓存公式值与数字格式已进入页面数据；图表、透视、条件格式等仍待补。
+页面负责：
+
+- 把 codec 快照装载为 Univer workbook；
+- 把 Univer 当前快照与打开时基线逐格比较，生成最小 `CellEdit`；
+- 保存时由 `src/page/patch.ts` 直接改 worksheet 的 `<c>` 节点
+  （inlineStr / 数字 / 布尔 / `<f>`），其余 ZIP 部件原样保留，再走
+  `ura.page.saveBytes`；
+- 主题、脏态、保存按钮、WorkStudio 页面会话。
+
+当前写回边界：**单元格值 / 公式**。格式、合并、行高列宽、插入删除行列
+等命令在页面命令层被拦截并撤销，避免“改了但保存丢失”；待 ChangePlan /
+`xlsx-gateway` 写入接入后逐项开放。
 
 ## PPTX：自有 codec + GenOffice 渲染树
 
@@ -152,12 +165,13 @@ WorkStudio 自己实现。双击文本可编辑，保存走 `savePptx` + `ura.pa
 `private: true`，`npm view @genoffice/docx-engine` 为 404。  
 因此 codec 不依赖它；只有 DOCX 页面层 fork 需要官方源码。
 
-仓库用 git submodule 固定官方源码，但只稀疏检出页面层用到的 11 个包：
+仓库用 git submodule 固定官方源码，但只稀疏检出页面层用到的 13 个包：
 
 ```
 vendor/genoffice   →  https://github.com/genspark-ai/genoffice
   只取 packages/{agent-core,ai-provider,docx-engine,electron-utils,font-metrics,
-                i18n,pptx-engine,pptx-render,project-store,ui,zip-gate}
+                i18n,pptx-engine,pptx-ops,pptx-render,project-store,ui,
+                xlsx-gateway,zip-gate}
 ```
 
 - `packages/docx/src/editor` 是从 `apps/docs` fork 下来的页面层，不再需要 `apps/*`；

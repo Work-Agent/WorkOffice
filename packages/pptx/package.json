@@ -1,7 +1,7 @@
 {
   "name": "@workstudio/plugin-pptx",
   "version": "0.1.0",
-  "description": "PPTX 阅读：自有 OOXML codec + GenOffice 渲染树",
+  "description": "PPTX 阅读与编辑：自有 OOXML codec + GenOffice Slides renderer",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,
@@ -23,17 +23,29 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "acorn": "^8.19.0",
+    "buffer": "^6.0.3",
     "fflate": "^0.8.2",
-    "buffer": "^6.0.3"
+    "konva": "^9.3.20",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-konva": "^19.0.10",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "esbuild": "^0.27.3",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "bidi-js": "^1.0.3",
+    "esbuild": "^0.27.3",
     "fast-xml-parser": "^5.3.4",
     "jszip": "^3.10.1",
-    "opentype.js": "^2.0.0"
+    "opentype.js": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   }
 }

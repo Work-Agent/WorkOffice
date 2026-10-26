@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
 const vendor = resolve(__dirname, '../../vendor/genoffice')
@@ -31,18 +32,18 @@ function genofficeSource(): Plugin {
 }
 
 export default defineConfig({
-  root: 'src/page',
+  root: 'src/editor',
   base: './',
-  plugins: [genofficeSource()],
+  plugins: [genofficeSource(), react()],
   resolve: {
     alias: [
       {
         find: /^node:crypto$/,
-        replacement: join(__dirname, 'src/page/node-crypto.ts'),
+        replacement: resolve(__dirname, 'src/editor/shims/node-crypto.ts'),
       },
       {
         find: /^node:zlib$/,
-        replacement: join(__dirname, 'src/page/node-zlib.ts'),
+        replacement: resolve(__dirname, 'src/editor/shims/node-zlib.ts'),
       },
       {
         find: /^@genoffice\/([^/]+)\/(.*)$/,
@@ -54,6 +55,8 @@ export default defineConfig({
       },
     ],
   },
+  esbuild: { jsx: 'automatic' },
+  optimizeDeps: { esbuildOptions: { jsx: 'automatic' } },
   build: {
     outDir: '../../dist/page',
     emptyOutDir: true,
