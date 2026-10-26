@@ -7,7 +7,6 @@ import {
   ShapePreview,
   useDismissablePopover,
   useRibbonCollapse,
-  type AiTokenUsageView,
 } from '@genoffice/ui'
 
 import {
@@ -68,10 +67,6 @@ import { isModalOpen, resolveGlobalShortcut } from './global-shortcuts'
 import { stepFontSize } from './font-size-ladder'
 
 import type { ChartSeriesVisualState } from '@genoffice/xlsx-gateway/domain/chart-visual'
-import type { ChangePlan } from '@genoffice/xlsx-gateway/domain/workbook.types'
-import type { AttachmentMeta } from '../shared/desktop-api'
-import type { AiChatMessage } from './ai/AiChatPanel'
-import type { SelectionAskAnchor } from './ai/selection-ask'
 import {
   PivotDialog,
   type PivotCreateRequest,
@@ -210,53 +205,9 @@ function ToolSymbol({ symbol }: { readonly symbol: string }): React.JSX.Element 
 
 interface ExcelShellProps {
   readonly openingWorkbook: boolean
-  readonly prompt: string
-  readonly preview: ChangePlan | null
   readonly selectionFormat: SelectionFormat | null
   readonly formatPainterActive: boolean
-  /// True when the workbook has any cell content (the one-click AI action
-  /// buttons are greyed out on an empty sheet).
-  readonly sheetHasContent: boolean
-  /// true while the real LLM agent is running (composer disabled meanwhile).
-  readonly aiBusy: boolean
-  /** tokens billed across the session, shown beside the composer */
-  readonly sessionUsage?: AiTokenUsageView
-  readonly chat: readonly AiChatMessage[]
-  readonly historicChat?: readonly AiChatMessage[]
-  /// Chat attachments (chips + 📎 button + drag-and-drop), same structure as the
-  /// docs/slides AI panels.
-  readonly attachments: readonly AttachmentMeta[]
-  readonly attachNotice: string | null
-  readonly onPickAttachments: () => void
-  readonly onAddAttachmentPaths: (paths: readonly string[]) => void
-  readonly onAddPastedImage: (data: ArrayBuffer, ext: string) => void
-  readonly onRemoveAttachment: (path: string) => void
-  readonly onPromptChange: (prompt: string) => void
-  /** Send the composer text, or the given instruction when provided (Retry also
-   *  resends that message's original attachments and passes the failed bubble's
-   *  chat index so the send replaces it in place) */
-  readonly onSend: (
-    instruction?: string,
-    attachments?: readonly AttachmentMeta[],
-    retryIndex?: number,
-  ) => void
-  readonly onStop: () => void
-  readonly onNewChat: () => void
   readonly onUndo: (steps?: number) => void
-  /// A1 notation of the multi-cell selection the AI composer offers as this
-  /// run's scope, or null when the resting single-cell selection carries none.
-  readonly aiScopeRange: string | null
-  /// Header names when that scope covers whole columns: they label the chip in
-  /// place of the range, because a column is a name to the user, not a letter.
-  readonly aiScopeColumns: readonly string[] | null
-  /// The range above belongs to a run in flight and can no longer be dropped.
-  readonly aiScopeLocked: boolean
-  /// Drag endpoint and viewport bounds used to place the localized trigger.
-  readonly aiSelectionAskAnchor: SelectionAskAnchor | null
-  readonly onAiSelectionAskDismiss: () => void
-  readonly onAiScopeDismiss: () => void
-  /// Citation link in an AI answer: jumps the grid to the cited cell/range.
-  readonly onAiCitation: (href: string) => void
   readonly onCommand: (command: string) => void
   /// True while Univer's in-cell editor is open (Backspace must delete
   /// characters, not clear the selection).
@@ -428,21 +379,8 @@ const PIVOT_MODEL_ERRORS: Record<PivotModelError, StringKey> = {
 }
 
 export function ExcelShell({
-  prompt,
-  preview,
   selectionFormat,
   formatPainterActive,
-  sheetHasContent,
-  aiBusy,
-  sessionUsage,
-  chat,
-  historicChat,
-  attachments,
-  attachNotice,
-  onPickAttachments,
-  onAddAttachmentPaths,
-  onAddPastedImage,
-  onRemoveAttachment,
   onGetSortColumns,
   onGetSheetProtection,
   onProtectSheet,
@@ -479,18 +417,7 @@ export function ExcelShell({
   onApplyHeaderFooter,
   printHost,
   onClosePrint,
-  onPromptChange,
-  onSend,
-  onStop,
-  onNewChat,
   onUndo,
-  aiScopeRange,
-  aiScopeColumns,
-  aiScopeLocked,
-  aiSelectionAskAnchor,
-  onAiSelectionAskDismiss,
-  onAiScopeDismiss,
-  onAiCitation,
   onCommand,
   onIsCellEditing,
   openingWorkbook,
@@ -885,7 +812,6 @@ export function ExcelShell({
           activeTab={activeTab}
           selectionFormat={selectionFormat}
           formatPainterActive={formatPainterActive}
-          sheetHasContent={sheetHasContent}
           sheetProtected={onGetSheetProtection()?.protected ?? null}
           workbookProtected={onGetWorkbookProtection()}
           formulaBarVisible={formulaBarVisible}
@@ -909,9 +835,6 @@ export function ExcelShell({
           onRefreshPivot={onRefreshPivot}
           onIsSelectionInPivot={onIsSelectionInPivot}
           onCommand={dispatchCommand}
-          onAiRun={() => {}}
-          aiOpen={false}
-          onAiToggle={() => {}}
         />
       </header>
 
@@ -1782,7 +1705,6 @@ function Ribbon({
   activeTab,
   selectionFormat,
   formatPainterActive,
-  sheetHasContent,
   sheetProtected,
   workbookProtected,
   formulaBarVisible,
@@ -1793,9 +1715,6 @@ function Ribbon({
   selectedTable,
   outlineSummary,
   onCommand,
-  onAiRun,
-  aiOpen,
-  onAiToggle,
   onListNames,
   calcManual,
   onRefreshPivot,
@@ -1804,7 +1723,6 @@ function Ribbon({
   readonly activeTab: RibbonTab
   readonly selectionFormat: SelectionFormat | null
   readonly formatPainterActive: boolean
-  readonly sheetHasContent: boolean
   readonly sheetProtected: boolean | null
   readonly workbookProtected: boolean | null
   /// View > Show echo for the formula bar toggle (app-level, not per sheet).
@@ -1820,11 +1738,6 @@ function Ribbon({
   readonly onListNames: () => readonly string[]
   /** Manual-recalc mode echo for the Calculation Options menu. */
   readonly calcManual: boolean
-  /** Open the AI panel and immediately send the given prompt */
-  readonly onAiRun: (prompt: string) => void
-  /** AI side panel visibility (docs/slides parity: the entry button toggles it) */
-  readonly aiOpen: boolean
-  readonly onAiToggle: () => void
   readonly onRefreshPivot: () => string | null
   readonly onIsSelectionInPivot: () => boolean
 }): React.JSX.Element {

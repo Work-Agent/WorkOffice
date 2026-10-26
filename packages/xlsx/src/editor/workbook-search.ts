@@ -8,16 +8,16 @@
  */
 import { formatAddress, type RangeBounds } from '@genoffice/xlsx-gateway/domain/cell-address'
 import type { CellScalar } from '@genoffice/xlsx-gateway/domain/workbook.types'
-import { findSheetCellsInFile, sidecarFindAvailable } from '../sidecar-find'
-import { ensureLazyRangeLoaded, readSheetRangeMapped } from '../univer-sync'
-import type { LazyWorkbookState } from '../univer-state'
-import { netAxisDelta } from '../view-transform'
+import { findSheetCellsInFile, sidecarFindAvailable } from './sidecar-find'
+import { ensureLazyRangeLoaded, readSheetRangeMapped } from './univer-sync'
+import type { LazyWorkbookState } from './univer-state'
+import { netAxisDelta } from './view-transform'
 import type {
   FindCellsMatch,
   FindCellsOptions,
   FindCellsOutcome,
   SelectRangeOutcome,
-} from './tools'
+} from './workbook-types'
 import type { WorkbookReadContext } from './workbook-readers'
 
 /** Every error value Excel can display (ECMA-376 ST_CellType plus the modern

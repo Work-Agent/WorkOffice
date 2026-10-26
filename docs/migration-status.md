@@ -11,7 +11,7 @@
 | vendor：`xlsx-gateway` / `pptx-ops` | ✅ 已加入 sparse checkout |
 | XLSX renderer fork | ✅ `packages/xlsx/src/editor`（285 文件） |
 | PPTX renderer fork | ✅ `packages/pptx/src/editor`（222 文件） |
-| XLSX 接入 WorkStudio | ✅ GenOffice renderer + xlsx-gateway 保存 |
+| XLSX 接入 WorkStudio | ✅ GenOffice renderer + xlsx-gateway 保存；AI 代码已删除 |
 | PPTX 接入 WorkStudio | ✅ GenOffice renderer + pptx-engine/pptx-ops 保存；AI 代码已删除 |
 | DOCX 上游同步 | ⏳ 待开始 |
 
@@ -33,7 +33,7 @@ XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
 - [x] 样式写回验证（`xl/styles.xml` + cell `s=`）
 - [x] 保存改用完整 `planCellEditsToXlsx` 参数（视觉/表格/透视/主题/保护/单元格图片不再丢失）
 - [x] `tsconfig` 纳入 `src/editor` / `src/shared` 并通过 typecheck
-- [ ] AI 代码彻底删除（`ai/`、App AI state）
+- [x] AI 代码彻底删除（`ai/`、AI i18n、App AI state、host AI stub）
 
 ## Phase 2：PPTX
 

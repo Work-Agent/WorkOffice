@@ -6,14 +6,14 @@
  */
 import type { IRange } from '@univerjs/core'
 import { columnLabel, parseAddress } from '@genoffice/xlsx-gateway/domain/cell-address'
-import { MAX_PATCH_ENTRY_BYTES } from '../../shared/desktop-api'
+import { MAX_PATCH_ENTRY_BYTES } from '../shared/desktop-api'
 import type { InMemoryWorkbookAdapter } from '@genoffice/xlsx-gateway/domain/in-memory-workbook'
 import type { CellFormatState, CellScalar } from '@genoffice/xlsx-gateway/domain/workbook.types'
-import { planFileTableRegistrations } from '../file-tables'
-import { toSelectionFormat } from '../selection-format'
-import { lazyCellReader } from '../univer-sync'
-import { lazySheetScreenExtent, type LazyWorkbookState, type UniverRuntime } from '../univer-state'
-import type { ActiveSheetInfo, FrozenSelection } from './tools'
+import { planFileTableRegistrations } from './file-tables'
+import { toSelectionFormat } from './selection-format'
+import { lazyCellReader } from './univer-sync'
+import { lazySheetScreenExtent, type LazyWorkbookState, type UniverRuntime } from './univer-state'
+import type { ActiveSheetInfo, FrozenSelection } from './workbook-types'
 
 /** The App refs the readers need; passed per call so they never go stale. */
 export interface WorkbookReadContext {

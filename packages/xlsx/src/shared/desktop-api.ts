@@ -1,10 +1,7 @@
 import { z } from 'zod'
-import { normalizeCustomProfile } from '@genoffice/ai-provider/browser'
 
 import {
   HEADER_FOOTER_PICTURE_POSITION,
-  MAX_CREATE_DOCUMENT_CONTENT_CHARS,
-  MAX_CREATE_DOCUMENT_TITLE_CHARS,
   MAX_CSV_EXPORT_CHARS,
   MAX_PDF_TEMPLATE_CHARS,
   MAX_SAVE_EDITS,
@@ -28,15 +25,6 @@ import {
   workbookStyleEditSchema,
   workbookVisualEditSchema,
 } from '@genoffice/xlsx-gateway/shared/edit-schemas'
-import type {
-  AiChatRequest,
-  AiChatResponse,
-  AiSettings,
-  AiStreamChunk,
-  AiStreamRequest,
-  GenSparkAccountStatus,
-} from '@genoffice/ai-provider'
-import type { AiPanelPrefs } from '@genoffice/ui'
 
 // edit schemas shared with the xlsx gateway package; re-exported so IPC consumers keep one import site
 export {
@@ -2503,200 +2491,6 @@ export type WorkbookPivotAdd = z.infer<typeof workbookPivotAddSchema>
 export type WorkbookCellStyle = z.infer<typeof cellStyleSchema>
 export type WorkbookConditionalRule = z.infer<typeof conditionalRuleSchema>
 
-// ---- AI settings + chat/stream: canonical types live in @genoffice/ai-provider,
-// shared with apps/docs. Validated here like every other renderer→main request in
-// this file; the validated shape is cast to AiSettings at the main-process call
-// site, which has every known provider key once merged through
-// resolveAiSettings/defaultAiSettings. ----
-
-const aiCustomCompatSchema = z
-  .object({
-    omitTemperature: z.boolean().optional(),
-    echoReasoning: z.boolean().optional(),
-    vision: z.boolean().optional(),
-    useMaxCompletionTokens: z.boolean().optional(),
-  })
-  .strict()
-
-const aiCustomModelProfileSchema = z
-  .object({
-    id: z.string().trim().min(1),
-    alias: z.string().optional(),
-    name: z.string().optional(),
-    ...aiCustomCompatSchema.shape,
-    maxTokens: z.number().int().positive().optional(),
-    contextWindow: z.number().int().positive().optional(),
-  })
-  .strict()
-
-// Keep IPC fields explicit, then use the canonical normalizer for header
-// legality and profile size bounds, just like the other apps' settings gate.
-const aiCustomProfileSchema = z
-  .object({
-    api: z.enum(['openai-compatible', 'anthropic', 'gemini']).optional(),
-    apiKeyEnv: z.string().optional(),
-    headers: z.record(z.string(), z.string()).optional(),
-    idleTimeoutMs: z.number().int().positive().optional(),
-    compat: aiCustomCompatSchema.optional(),
-    bodyExtras: z.record(z.string(), z.unknown()).optional(),
-    modelProfiles: z.array(aiCustomModelProfileSchema).optional(),
-    probedProfiles: z.array(aiCustomModelProfileSchema).optional(),
-  })
-  .strict()
-
-const aiProviderConfigSchema = z
-  .object({
-    apiKey: z.string(),
-    model: z.string(),
-    baseUrl: z.string().optional(),
-    cliPath: z.string().optional(),
-    profile: aiCustomProfileSchema.transform(normalizeCustomProfile).optional(),
-  })
-  .strict()
-
-const aiMediaProviderConfigSchema = z
-  .object({
-    apiKey: z.string(),
-    baseUrl: z.string().optional(),
-    imageModel: z.string(),
-    analysisModel: z.string(),
-  })
-  .strict()
-
-const aiCustomEndpointSchema = z
-  .object({
-    id: z.string().min(1),
-    name: z.string(),
-    baseUrl: z.string(),
-    apiKey: z.string(),
-    model: z.string(),
-    models: z.array(z.string()).optional(),
-    ...aiCustomProfileSchema.shape,
-  })
-  .strict()
-  .transform(({ id, name, baseUrl, apiKey, model, models, ...profile }) => ({
-    id,
-    name,
-    baseUrl,
-    apiKey,
-    model,
-    ...(models !== undefined ? { models } : {}),
-    ...normalizeCustomProfile(profile),
-  }))
-
-export const aiSettingsInputSchema = z
-  .object({
-    provider: z.string().min(1),
-    providers: z.record(z.string(), aiProviderConfigSchema),
-    customEndpoints: z.array(aiCustomEndpointSchema).optional(),
-    customEndpoint: z.string().optional(),
-    gskToolsEnabled: z.boolean().optional(),
-    media: z
-      .object({
-        imageProvider: z.string().min(1).optional(),
-        analysisProvider: z.string().min(1).optional(),
-        videoAnalysisProvider: z.string().min(1).optional(),
-        // pre-catalog single choice, still accepted on read
-        provider: z.string().min(1).optional(),
-        providers: z.record(z.string(), aiMediaProviderConfigSchema),
-      })
-      .strict()
-      .optional(),
-    search: z
-      .object({
-        provider: z.string().min(1),
-        providers: z.record(z.string(), z.object({ apiKey: z.string() }).strict()),
-      })
-      .strict()
-      .optional(),
-    // bounds are enforced by clampMaxOutputTokens on read; the schema only
-    // rejects nonsense (this object is .strict(), so an omitted key here would
-    // make the whole settings save fail)
-    maxOutputTokens: z.number().int().positive().optional(),
-  })
-  .strict()
-
-const agentToolResultSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    output: z.string(),
-    isError: z.boolean().optional(),
-  })
-  .strict()
-
-const agentToolCallSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    input: z.record(z.string(), z.unknown()),
-    signature: z.string().optional(),
-  })
-  .strict()
-
-/// Inline vision input on a user turn (image attachments, base64 without data: prefix).
-const agentImageSchema = z
-  .object({
-    base64: z.string().min(1),
-    mime: z.string().min(1).max(64),
-  })
-  .strict()
-
-const agentMessageSchema = z.union([
-  z
-    .object({
-      role: z.literal('user'),
-      text: z.string(),
-      images: z.array(agentImageSchema).max(20).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      role: z.literal('assistant'),
-      text: z.string(),
-      toolCalls: z.array(agentToolCallSchema).optional(),
-      // captured model thinking, echoed back for interleaved-thinking models
-      reasoning: z.string().optional(),
-    })
-    .strict(),
-  z.object({ role: z.literal('tool'), results: z.array(agentToolResultSchema) }).strict(),
-])
-
-const agentToolDefSchema = z
-  .object({
-    name: z.string(),
-    description: z.string(),
-    inputSchema: z.record(z.string(), z.unknown()),
-  })
-  .strict()
-
-const MAX_AI_MESSAGES = 500
-const MAX_AI_TOOLS = 50
-
-export const aiChatRequestSchema = z
-  .object({
-    settings: aiSettingsInputSchema,
-    system: z.string(),
-    user: z.string(),
-  })
-  .strict()
-
-export const aiStreamRequestSchema = z
-  .object({
-    requestId: z.string().min(1),
-    sessionId: z.string().uuid().optional(),
-    settings: aiSettingsInputSchema,
-    system: z.string(),
-    messages: z.array(agentMessageSchema).max(MAX_AI_MESSAGES),
-    tools: z.array(agentToolDefSchema).max(MAX_AI_TOOLS).optional(),
-    maxTokens: z.number().int().positive().optional(),
-  })
-  .strict()
-
-export type AiSettingsInput = z.infer<typeof aiSettingsInputSchema>
-export type AiChatRequestInput = z.infer<typeof aiChatRequestSchema>
-export type AiStreamRequestInput = z.infer<typeof aiStreamRequestSchema>
-
 const pdfPageVariantSchema = z
   .object({
     headerTemplate: z.string().min(1).max(MAX_PDF_TEMPLATE_CHARS).optional(),
@@ -2814,87 +2608,6 @@ export type WorkbookExportCsvResult = z.infer<typeof workbookExportCsvResultSche
 /// xlsx/csv carry one worksheet's serialized CSV in content (the renderer
 /// reads the grid, mirroring the manual CSV export); docx/pdf/md carry
 /// AI-authored HTML/Markdown, routed by the shell into the docs-owned
-/// creation flow (#960).
-export const workbookCreateDocumentRequestSchema = z
-  .object({
-    type: z.enum(['xlsx', 'csv', 'docx', 'pdf', 'md', 'html']),
-    title: z.string().min(1).max(MAX_CREATE_DOCUMENT_TITLE_CHARS),
-    content: z.string().min(1).max(MAX_CSV_EXPORT_CHARS),
-    /// xlsx only: the worksheet name inside the created workbook (the source
-    /// sheet's name, so it already satisfies Excel's naming rules).
-    sheetName: z.string().min(1).max(31).optional(),
-  })
-  .strict()
-  .superRefine((request, ctx) => {
-    if (
-      request.type !== 'xlsx' &&
-      request.type !== 'csv' &&
-      request.content.length > MAX_CREATE_DOCUMENT_CONTENT_CHARS
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['content'],
-        message: `content must not exceed ${MAX_CREATE_DOCUMENT_CONTENT_CHARS} characters for docx/pdf/md`,
-      })
-    }
-  })
-
-/// Loose result shape (ok: boolean, not a literal union) so the shell can
-/// wire the docs-owned creator in directly — its CreateDocumentResult is
-/// structurally identical.
-export const workbookCreateDocumentResultSchema = z
-  .object({
-    ok: z.boolean(),
-    path: z.string().min(1).optional(),
-    error: z.string().optional(),
-  })
-  .strict()
-
-export type WorkbookCreateDocumentRequest = z.infer<typeof workbookCreateDocumentRequestSchema>
-export type WorkbookCreateDocumentResult = z.infer<typeof workbookCreateDocumentResultSchema>
-
-// ---- Chat attachments (local files fed to the agent via tools; same structure
-// as apps/docs and apps/slides) ----
-
-/** Image attachment extensions: no text extraction; read as base64 on send and
- * passed to the model as a multimodal image with the user message */
-export const ATTACHMENT_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp'])
-
-export interface AttachmentMeta {
-  /** Absolute local path; the file never leaves the machine */
-  path: string
-  name: string
-  /** Lowercase extension, no dot */
-  ext: string
-  sizeBytes: number
-}
-
-export interface AttachmentAddResult {
-  accepted: AttachmentMeta[]
-  /** Per-file rejection reason (too large/unsupported type/unreadable) */
-  rejected: string[]
-}
-
-export interface AttachmentReadResult {
-  ok: boolean
-  error?: string
-  name?: string
-  /** Total character count of the extracted text */
-  totalChars?: number
-  /** The requested chunk */
-  text?: string
-  offset?: number
-}
-
-/** Raw bytes of an image attachment (multimodal input) */
-export interface AttachmentImageResult {
-  ok: boolean
-  /** raw base64 (no data: prefix) */
-  base64?: string
-  mime?: string
-  error?: string
-}
-
 export type UiTheme = 'light' | 'dark' | 'system'
 
 /**
@@ -2958,10 +2671,6 @@ export interface DesktopApi {
   /** shell-wide AutoSave default (see useAutoSavePref) */
   getAutoSaveDefault(): Promise<AutoSaveDefault>
   onAutoSaveDefaultChanged(handler: (value: AutoSaveDefault) => void): () => void
-  /** AI panel text size + chat-input spellcheck (Settings → General in the shell) */
-  getAiPanelPrefs(): Promise<AiPanelPrefs>
-  setAiPanelPrefs(patch: Partial<AiPanelPrefs>): Promise<AiPanelPrefs>
-  onAiPanelPrefsChanged(handler: (prefs: AiPanelPrefs) => void): () => void
   /**
    * the user pressed the shell chrome (tab strip) or started dragging the
    * window — no DOM event or blur reaches this view, so the shell relays the
@@ -3017,9 +2726,6 @@ export interface DesktopApi {
   exportCsv(request: WorkbookExportCsvRequest): Promise<WorkbookExportCsvResult>
   /// First Save of a CSV session: native "keep this format?" dialog.
   confirmCsvSave(): Promise<'csv' | 'xlsx' | 'cancel'>
-  /// AI create_document: write a new standalone file into the default save
-  /// folder (no dialog) and open it in a new tab.
-  createDocument(request: WorkbookCreateDocumentRequest): Promise<WorkbookCreateDocumentResult>
   closeWorkbook(sessionId: string): Promise<void>
   openExternal(url: string): Promise<void>
   /// Application-menu File commands (Open/Save/Save As); returns unsubscribe.
@@ -3057,44 +2763,8 @@ export interface DesktopApi {
   /// Author name for threaded comments (Settings → General, falling back to the OS account).
   getUserDisplayName(): Promise<string>
   onUserDisplayNameChanged(handler: (name: string) => void): () => void
-  getAiSettings(): Promise<AiSettings>
-  setAiSettings(settings: AiSettings): Promise<void>
-  /// ai-settings.json was rewritten by any renderer; re-read it
-  onAiSettingsChanged(handler: () => void): () => void
-  /// shell only: switch to Home and open Settings › AI Model (rejects in standalone)
-  openAiModelSettings(): Promise<void>
-  aiChat(request: AiChatRequest): Promise<AiChatResponse>
-  /// start a streaming AI call; deltas arrive via onAiStream with the same requestId
-  aiStream(request: AiStreamRequest): Promise<void>
-  aiStreamCancel(requestId: string): Promise<void>
-  /// Genspark account status (gsk login state); withEmail also returns the email
-  /// (needs a network request, slower)
-  aiGskStatus(withEmail?: boolean): Promise<GenSparkAccountStatus>
-  /// Opens the browser to sign in to Genspark (fire-and-forget; aiGskStatus
-  /// becomes signed-in on completion)
-  aiGskLogin(): Promise<void>
-  /// Web search (main-process Serper/DuckDuckGo, shared with docs/slides)
-  webSearch(query: string, maxResults?: number): Promise<WebSearchResult>
-  /// Image search (same shared main-process channel as docs/slides)
-  imageSearch(query: string, maxResults?: number): Promise<ImageSearchResponse>
-  /// AI image generation via the Genspark account (sheets-owned channel)
-  generateImage(op: { prompt: string; aspectRatio?: string }): Promise<GenerateImageResult>
   /// Downloads an image URL in the main process (SSRF-guarded); null on failure
   fetchImage(url: string): Promise<{ base64: string; mime: string } | null>
-  onAiStream(handler: (chunk: AiStreamChunk) => void): () => void
-  /// Chat attachments: multi-select file dialog (returns null on cancel)
-  pickAttachments(): Promise<AttachmentAddResult | null>
-  /// Validates dropped paths and returns attachment metadata
-  addAttachmentPaths(paths: string[]): Promise<AttachmentAddResult>
-  /// Persists a clipboard-pasted image (no local path) to a temp file and adds it
-  /// as an attachment
-  addPastedImage(data: ArrayBuffer, ext: string): Promise<AttachmentAddResult>
-  /// Reads one chunk of an attachment's extracted text
-  readAttachment(path: string, offset: number, maxChars: number): Promise<AttachmentReadResult>
-  /// Reads an image attachment as base64 for multimodal input (≤5MB)
-  readAttachmentImage(path: string): Promise<AttachmentImageResult>
-  /// Absolute path of a File dropped onto the window (Electron webUtils)
-  getPathForFile(file: File): string
 }
 
 export type MenuAction =
