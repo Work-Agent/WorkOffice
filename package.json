@@ -12,7 +12,8 @@
     "clean": "pnpm --filter './packages/*' clean",
     "setup": "node scripts/setup-genoffice.mjs && pnpm install",
     "install:plugins": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
-    "build:codec": "pnpm --filter './packages/*' build:ura"
+    "build:codec": "pnpm --filter './packages/*' build:ura",
+    "verify": "node scripts/verify-contract.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

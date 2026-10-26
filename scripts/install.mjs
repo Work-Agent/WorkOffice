@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// 把构建好的插件装进 WorkStudio 的内置插件目录（开发用）或指定目录。
+// 把构建好的插件装进 WorkStudio 的内置插件目录（开发 / 随包构建）或用户安装目录。
 //
 //   node scripts/install.mjs --target ../WorkStudio/src/plugins
-//   node scripts/install.mjs --target "~/Library/Application Support/WorkStudio/plugins"
+//      → WorkStudio 构建时拷贝到 out/plugins，随应用分发。
+//   node scripts/install.mjs --target "~/Library/Application Support/WorkStudio/plugins/node_modules"
+//      → 用户安装目录；必须落在 plugins/node_modules 下，PluginService 只扫描这里
+//        （或 plugins.md 里显式声明的本地来源）。
 //
 // 只复制 package.json 与 dist/；源码与 node_modules 不进入宿主。
 

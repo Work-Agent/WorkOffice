@@ -1,7 +1,7 @@
 {
   "name": "@workstudio/plugin-xlsx",
   "version": "0.1.0",
-  "description": "XLSX 阅读：基于 GenOffice xlsx-gateway 解析，WorkStudio 自绘网格页",
+  "description": "XLSX 阅读与编辑：自有 OOXML codec + WorkStudio 自绘网格页",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,

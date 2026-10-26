@@ -1,6 +1,6 @@
 // ─── XLSX 网格页 ────────────────────────────────────────────────────
 //
-// 页面只消费 codec 投影出的 sheet/cell 快照：标签、选区、滚动、主题
+// 页面只消费 codec 产出的 sheet/cell 快照：标签、选区、滚动、主题
 // 全部由 WorkStudio 侧实现；不引入 GenOffice 的 Univer 外壳。
 
 import type { PageCommitResult, PageSessionInfo } from './env'
@@ -388,7 +388,7 @@ function mount(data: XlsxPageData, sessionId: string): void {
         next,
       )
       if (!result?.ok) {
-        badge.textContent = result?.conflict ? '保存冲突' : '保存失败'
+        badge.textContent = '保存失败'
         return
       }
       baseBytes = next

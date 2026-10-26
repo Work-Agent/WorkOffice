@@ -1,26 +1,23 @@
 // ─── DOCX codec（WorkStudio 自有） ───────────────────────────────────
 //
 // codec 不依赖 GenOffice：只做 OOXML 包的最小解析——取出 word/document.xml，
-// 抽取段落文本与标题大纲，供 agent 投影使用。页面层仍可使用 GenOffice 的
-// 编辑器来渲染/编辑，但那是页面的事，不进入 codec。
+// 抽取段落文本与标题大纲，供 sidecar 与 presenter 使用。页面层仍可使用
+// GenOffice 的编辑器来渲染/编辑，但那是页面的事，不进入 codec。
 
 import { strFromU8, unzipSync } from 'fflate'
-import { registerCodec, registerConsumer } from './sdk'
+import { registerCodec, registerPresenter, registerSidecar } from './sdk'
+import { MIME } from './ura-types'
 import type {
-  AgentProjection,
   Codec,
-  Consumer,
-  DecodedDoc,
-  EditorProjection,
   Patch,
+  Presenter,
   RawContent,
+  SidecarProvider,
 } from './ura-types'
 
-const DOC_TYPE = 'ooxml-docx@1' as const
+const CODEC_ID = 'docx'
 
 interface DocxDoc {
-  /** 原始 OOXML 字节（base64；页面数据面只走可结构化克隆的字符串）。 */
-  bytes: string
   text: string
   name: string
 }
@@ -98,9 +95,9 @@ function parseDocumentXml(xml: string): {
 }
 
 const codec: Codec = {
-  hints: ['ooxml-docx'],
+  id: CODEC_ID,
+  keys: [{ transport: '*', mime: MIME.docx }],
   extensions: ['docx', 'docm', 'dotx'],
-  docType: DOC_TYPE,
   patchType: 'bytes',
 
   decode(raw: RawContent, ref: string) {
@@ -116,11 +113,10 @@ const codec: Codec = {
     if (!documentXml) throw new Error('DOCX 缺少 word/document.xml')
 
     const { text, outline } = parseDocumentXml(strFromU8(documentXml))
-    const bytes = base64Of(raw.bytes)
     return {
-      docType: DOC_TYPE,
-      doc: { bytes, text, name: nameOf(ref) } satisfies DocxDoc,
-      projection: { bytes, name: nameOf(ref) },
+      doc: { text, name: nameOf(ref) } satisfies DocxDoc,
+      // grep / locate 以正文为锚点；原始字节不进结构化文档。
+      anchorMap: text,
       outline,
     }
   },
@@ -137,27 +133,30 @@ const codec: Codec = {
   },
 }
 
-const agentConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'agent',
-  project(decoded): AgentProjection {
-    const text = (decoded.doc as DocxDoc).text
+const agentSidecar: SidecarProvider = {
+  key: { transport: '*', mime: MIME.docx, codec: CODEC_ID },
+  sidecar(decoded) {
+    const text =
+      typeof decoded.anchorMap === 'string'
+        ? decoded.anchorMap
+        : (decoded.doc as DocxDoc).text
     return { type: 'text', content: text || '(空 DOCX 文档)' }
   },
 }
 
-const editorConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'editor',
+const editorPresenter: Presenter = {
+  key: { transport: '*', mime: MIME.docx, codec: CODEC_ID },
+  type: 'page',
   surface: 'docx-editor',
-  project(decoded, raw, ref): EditorProjection {
+  present(decoded, raw, ref) {
     const doc = decoded.doc as DocxDoc
     return {
       type: 'page',
       surface: 'docx-editor',
       page: '',
       data: {
-        bytes: doc.bytes,
+        // 页面数据面只走可结构化克隆的字符串。
+        bytes: base64Of(raw.bytes),
         name: doc.name,
         ref,
         version: raw.version,
@@ -167,5 +166,5 @@ const editorConsumer: Consumer = {
 }
 
 registerCodec(codec)
-registerConsumer(agentConsumer)
-registerConsumer(editorConsumer)
+registerSidecar(agentSidecar)
+registerPresenter(editorPresenter)

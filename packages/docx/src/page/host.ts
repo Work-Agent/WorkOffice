@@ -2,7 +2,7 @@
 //
 // 这是两套交互模型的唯一接缝，不是 GenOffice 主进程的复制：
 //   GenOffice 打开 = 文件路径 → 这里 = page.get 的字节
-//   GenOffice 保存 = 写路径 → 这里 = ura.page.saveBytes（严格版本写）
+//   GenOffice 保存 = 写路径 → 这里 = ura.page.saveBytes（页面会话串行写）
 //   GenOffice 对话框 / 菜单 → 这里 = 不承载，交给 WorkStudio 壳层
 //
 // 页面只持有语义化会话；路径、版本、写通道都不进入 GenOffice 的交互代码。
@@ -107,12 +107,6 @@ export function installDocxHost(input: DocxHostInput): void {
       if (result?.ok) {
         bus.send({ type: 'dirty', dirty: false })
         return { ok: true }
-      }
-      if (result?.conflict) {
-        return {
-          ok: false,
-          error: '文件已被外部修改；请重新打开文档后再保存',
-        }
       }
       return { ok: false, error: '保存失败' }
     } catch (error) {

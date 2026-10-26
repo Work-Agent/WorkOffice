@@ -4,7 +4,8 @@ export interface PageSessionInfo {
   id: string
   ref: string
   version: string
-  docType: string | null
+  /** 命中的 codec id；null = 未经解码（raw）。 */
+  codec: string | null
   surface: string
   owner?: string
   page: string
@@ -13,14 +14,15 @@ export interface PageSessionInfo {
 }
 
 export interface PageCommitResult {
-  ok: boolean
+  ok: true
+  version: string
+}
+
+export interface UraChangeEvent {
+  ref: string
+  type: 'content' | 'structure' | 'state'
   version?: string
-  conflict?: {
-    base: string
-    current: string
-    mine: string
-    encoding?: 'text' | 'base64'
-  }
+  at: number
 }
 
 export interface ExtensionBridge {
@@ -35,7 +37,7 @@ export interface ExtensionBridge {
       close(id: string): Promise<unknown>
     }
     watch(ref?: string): Promise<{ ref: string } | null>
-    onChange(cb: (event: { ref?: string; version?: string }) => void): () => void
+    onChange(cb: (event: UraChangeEvent) => void): () => void
   }
   bus: {
     on(cb: (message: { type: string; [key: string]: unknown }) => void): () => void

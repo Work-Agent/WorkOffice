@@ -1,21 +1,20 @@
 // ─── PPTX codec（WorkStudio 自有） ───────────────────────────────────
 //
 // codec 只做 OOXML 包的最小解析：按 slideN.xml 顺序抽文本与标题，
-// 供 agent 投影使用。页面层再拿原始字节交给 GenOffice 渲染树。
+// 供 sidecar 与 presenter 使用。页面层再拿原始字节交给 GenOffice 渲染树。
 
 import { strFromU8, unzipSync } from 'fflate'
-import { registerCodec, registerConsumer } from './sdk'
+import { registerCodec, registerPresenter, registerSidecar } from './sdk'
+import { MIME } from './ura-types'
 import type {
-  AgentProjection,
   Codec,
-  Consumer,
-  DecodedDoc,
-  EditorProjection,
   Patch,
+  Presenter,
   RawContent,
+  SidecarProvider,
 } from './ura-types'
 
-const DOC_TYPE = 'ooxml-pptx@1' as const
+const CODEC_ID = 'pptx'
 
 interface SlideText {
   index: number
@@ -24,7 +23,6 @@ interface SlideText {
 }
 
 interface PptxDoc {
-  bytes: string
   name: string
   slides: SlideText[]
 }
@@ -114,22 +112,18 @@ function slidesText(slides: SlideText[]): string {
 }
 
 const codec: Codec = {
-  hints: ['ooxml-pptx'],
+  id: CODEC_ID,
+  keys: [{ transport: '*', mime: MIME.pptx }],
   extensions: ['pptx', 'pptm', 'potx'],
-  docType: DOC_TYPE,
   patchType: 'bytes',
 
   decode(raw: RawContent, ref: string) {
     const slides = parseSlides(raw.bytes)
-    const bytes = base64Of(raw.bytes)
+    const text = slidesText(slides)
     return {
-      docType: DOC_TYPE,
-      doc: { bytes, name: nameOf(ref), slides } satisfies PptxDoc,
-      projection: {
-        bytes,
-        name: nameOf(ref),
-        slideCount: slides.length,
-      },
+      doc: { name: nameOf(ref), slides } satisfies PptxDoc,
+      // 幻灯片文本既是 agent 文本，也是 grep 锚点。
+      anchorMap: text,
       outline: slides.map((slide, i) => ({
         level: 1,
         title: slide.title || `第 ${i + 1} 页`,
@@ -149,27 +143,29 @@ const codec: Codec = {
   },
 }
 
-const agentConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'agent',
-  project(decoded): AgentProjection {
-    const text = slidesText((decoded.doc as PptxDoc).slides)
+const agentSidecar: SidecarProvider = {
+  key: { transport: '*', mime: MIME.pptx, codec: CODEC_ID },
+  sidecar(decoded) {
+    const text =
+      typeof decoded.anchorMap === 'string'
+        ? decoded.anchorMap
+        : slidesText((decoded.doc as PptxDoc).slides)
     return { type: 'text', content: text || '(空 PPTX 文档)' }
   },
 }
 
-const editorConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'editor',
+const editorPresenter: Presenter = {
+  key: { transport: '*', mime: MIME.pptx, codec: CODEC_ID },
+  type: 'page',
   surface: 'pptx-viewer',
-  project(decoded, raw, ref): EditorProjection {
+  present(decoded, raw, ref) {
     const doc = decoded.doc as PptxDoc
     return {
       type: 'page',
       surface: 'pptx-viewer',
       page: '',
       data: {
-        bytes: doc.bytes,
+        bytes: base64Of(raw.bytes),
         name: doc.name,
         ref,
         version: raw.version,
@@ -180,5 +176,5 @@ const editorConsumer: Consumer = {
 }
 
 registerCodec(codec)
-registerConsumer(agentConsumer)
-registerConsumer(editorConsumer)
+registerSidecar(agentSidecar)
+registerPresenter(editorPresenter)

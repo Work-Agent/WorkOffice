@@ -1,25 +1,24 @@
 // ─── XLSX codec（WorkStudio 自有） ───────────────────────────────────
 //
 // codec 不依赖 GenOffice：用 fflate + fast-xml-parser 读 OOXML 包，
-// 生成 sheet/cell 快照供 projection 与 agent 文本使用。页面只消费快照。
+// 生成 sheet/cell 快照供 sidecar 与 presenter 使用。页面只消费快照。
 
 import { strFromU8, unzipSync } from 'fflate'
 import { XMLParser } from 'fast-xml-parser'
-import { registerCodec, registerConsumer } from './sdk'
+import { registerCodec, registerPresenter, registerSidecar } from './sdk'
+import { MIME } from './ura-types'
 import type {
-  AgentProjection,
   CellLike,
   CellStyle,
   Codec,
-  Consumer,
-  DecodedDoc,
-  EditorProjection,
   Patch,
+  Presenter,
   RawContent,
   SheetLike,
+  SidecarProvider,
 } from './ura-types'
 
-const DOC_TYPE = 'ooxml-xlsx@1' as const
+const CODEC_ID = 'xlsx'
 
 const BUILTIN_FORMATS: Record<number, string> = {
   0: 'General',
@@ -53,7 +52,6 @@ const BUILTIN_FORMATS: Record<number, string> = {
 }
 
 interface XlsxDoc {
-  bytes: string
   name: string
   sheets: SheetLike[]
 }
@@ -388,17 +386,17 @@ function workbookText(sheets: SheetLike[]): string {
 }
 
 const codec: Codec = {
-  hints: ['ooxml-xlsx'],
+  id: CODEC_ID,
+  keys: [{ transport: '*', mime: MIME.xlsx }],
   extensions: ['xlsx', 'xlsm', 'xltx'],
-  docType: DOC_TYPE,
   patchType: 'bytes',
 
   decode(raw: RawContent, ref: string) {
     const sheets = parseWorkbook(raw.bytes)
     return {
-      docType: DOC_TYPE,
-      doc: { bytes: base64Of(raw.bytes), name: nameOf(ref), sheets } satisfies XlsxDoc,
-      projection: { bytes: base64Of(raw.bytes), name: nameOf(ref), sheets },
+      doc: { name: nameOf(ref), sheets } satisfies XlsxDoc,
+      // workbookText 同时是 agent 文本与 grep 锚点。
+      anchorMap: workbookText(sheets),
     }
   },
 
@@ -414,30 +412,32 @@ const codec: Codec = {
   },
 }
 
-const agentConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'agent',
-  project(decoded): AgentProjection {
+const agentSidecar: SidecarProvider = {
+  key: { transport: '*', mime: MIME.xlsx, codec: CODEC_ID },
+  sidecar(decoded) {
+    const text =
+      typeof decoded.anchorMap === 'string'
+        ? decoded.anchorMap
+        : workbookText((decoded.doc as XlsxDoc).sheets)
     return {
       type: 'text',
-      content:
-        workbookText((decoded.doc as XlsxDoc).sheets) || '(空 XLSX 工作簿)',
+      content: text || '(空 XLSX 工作簿)',
     }
   },
 }
 
-const editorConsumer: Consumer = {
-  docType: DOC_TYPE,
-  type: 'editor',
+const editorPresenter: Presenter = {
+  key: { transport: '*', mime: MIME.xlsx, codec: CODEC_ID },
+  type: 'page',
   surface: 'xlsx-viewer',
-  project(decoded, raw, ref): EditorProjection {
+  present(decoded, raw, ref) {
     const doc = decoded.doc as XlsxDoc
     return {
       type: 'page',
       surface: 'xlsx-viewer',
       page: '',
       data: {
-        bytes: doc.bytes,
+        bytes: base64Of(raw.bytes),
         name: doc.name,
         ref,
         version: raw.version,
@@ -448,5 +448,5 @@ const editorConsumer: Consumer = {
 }
 
 registerCodec(codec)
-registerConsumer(agentConsumer)
-registerConsumer(editorConsumer)
+registerSidecar(agentSidecar)
+registerPresenter(editorPresenter)

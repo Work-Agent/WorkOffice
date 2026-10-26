@@ -2,11 +2,15 @@
 //
 // 外部插件包在安装目录里运行，拿不到 WorkStudio 源码的相对路径。
 // 宿主在装载插件前把 SDK 注册面挂到 globalThis；这里只做类型化转发。
+//
+// 注册面与 WorkStudio src/main/ura/sdk.ts 保持一致：
+//   transport / codec / store / presenter / sidecar / collection / viewAction
 
 import type {
   Codec,
   CollectionProvider,
-  Consumer,
+  Presenter,
+  SidecarProvider,
   Store,
   Transport,
   ViewAction,
@@ -16,7 +20,8 @@ interface WorkStudioSdk {
   registerTransport(transport: Transport): void
   registerCodec(codec: Codec): void
   registerStore(store: Store): void
-  registerConsumer(consumer: Consumer): void
+  registerPresenter(presenter: Presenter): void
+  registerSidecar(provider: SidecarProvider): void
   registerCollection(provider: CollectionProvider): void
   registerViewAction(action: ViewAction): void
 }
@@ -32,11 +37,21 @@ function sdk(): WorkStudioSdk {
 
 export const registerTransport = (transport: Transport): void =>
   sdk().registerTransport(transport)
+
 export const registerCodec = (codec: Codec): void => sdk().registerCodec(codec)
+
 export const registerStore = (store: Store): void => sdk().registerStore(store)
-export const registerConsumer = (consumer: Consumer): void =>
-  sdk().registerConsumer(consumer)
+
+/** 表现层：页面 / 浏览器。 */
+export const registerPresenter = (presenter: Presenter): void =>
+  sdk().registerPresenter(presenter)
+
+/** agent 读取面：文本 / schema。 */
+export const registerSidecar = (provider: SidecarProvider): void =>
+  sdk().registerSidecar(provider)
+
 export const registerCollection = (provider: CollectionProvider): void =>
   sdk().registerCollection(provider)
+
 export const registerViewAction = (action: ViewAction): void =>
   sdk().registerViewAction(action)

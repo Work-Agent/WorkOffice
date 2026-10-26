@@ -1,8 +1,8 @@
 # WorkStudio Office 插件
 
-以 WorkStudio 的 **transport / codec / projection / 页面会话** 为骨架。
-codec 与 projection 由本仓库实现，只依赖通用 ZIP/XML 库；GenOffice
-只用于需要富文本/分页的页面层。
+以 WorkStudio 的 **transport / codec / presenter / sidecar / 页面会话** 为骨架。
+codec 与页面数据由本仓库实现，只依赖通用 ZIP/XML 库；GenOffice 只用于
+需要富文本 / 分页 / 幻灯片渲染的页面层。
 
 当前进度：
 
@@ -12,20 +12,58 @@ codec 与 projection 由本仓库实现，只依赖通用 ZIP/XML 库；GenOffic
 | `@workstudio/plugin-xlsx` | 工作表/单元格浏览 · 基础值/公式编辑 | 可用 |
 | `@workstudio/plugin-pptx` | 幻灯片浏览 · 文本节点编辑 | 可用 |
 
+## 插件契约
+
+三个包都是标准 WorkStudio 插件包：
+
+```json
+{
+  "name": "@workstudio/plugin-docx",
+  "type": "module",
+  "exports": { "./ura": "./dist/ura.js" },
+  "workstudio": {
+    "id": "docx",
+    "label": "Word 文档",
+    "icon": "file-text",
+    "page": "dist/page/index.html"
+  }
+}
+```
+
+`dist/ura.js` 是主进程注册入口，模块求值时调用新版 SDK：
+
+```ts
+registerCodec(codec)        // (transport, mime) → 文档
+registerPresenter(presenter) // (transport, mime, codec) → 页面
+registerSidecar(provider)    // (transport, mime, codec) → agent 文本
+```
+
+每个插件声明三个键：
+
+| 注册面 | 键 |
+| --- | --- |
+| codec | `{ transport: '*', mime: MIME.docx }` |
+| presenter | `{ transport: '*', mime: MIME.docx, codec: 'docx' }` |
+| sidecar | `{ transport: '*', mime: MIME.docx, codec: 'docx' }` |
+
+MIME 由来源给出：`file` transport 按扩展名映射，`http(s)` 按响应
+`Content-Type`。codec 不再声明 `hints` 或 `docType`；格式身份就是
+`codec.id`。
+
 ## 为什么不是“直接嵌 GenOffice 应用”
 
 GenOffice 是完整 Electron 应用：文档身份是文件路径，打开/保存/菜单/原生对话框
 都由它自己的主进程和 preload 承担。WorkStudio 的交互模型不同：
 
-- 文档身份是 URA 统一标识，页面只拿页面会话 id 和投影数据；
+- 文档身份是 URA 统一标识，页面只拿页面会话 id 和 presenter 投递的数据；
 - 页面没有 Node、没有裸 IPC，只能走白名单命令；
-- 保存必须经过严格版本写（`ura.page.saveBytes`），冲突由页面会话返回；
+- 保存统一走 `ura.page.saveBytes`，页面会话按资源键串行写入；
 - 标签、脏态、主题、侧栏、文件选择归 WorkStudio 壳层。
 
 因此这里 **不引入 GenOffice 的 main / preload**，也不把它的 App 当黑盒：
 
-1. **codec/projection 自有**：DOCX/XLSX 用 `fflate` / `fast-xml-parser` 读 OOXML，
-   不依赖 `@genoffice/*`；
+1. **codec / presenter / sidecar 自有**：DOCX/XLSX 用 `fflate` /
+   `fast-xml-parser` 读 OOXML，不依赖 `@genoffice/*`；
 2. Docs 页面层 **fork 到 `packages/docx/src/editor`**，由我们持有并改造；
 3. `packages/docx/src/page` 是 WorkStudio 页面入口与宿主适配层，只把
    `window.desktop` 语义映射到页面会话。
@@ -46,12 +84,12 @@ GenOffice 是完整 Electron 应用：文档身份是文件路径，打开/保�
 
 ```
 WorkStudio file transport
-        │  bytes + version + formatHints
+        │  bytes + version + mime
         ▼
 DOCX codec（自有 OOXML 解析）
-        │  doc: raw bytes / text / outline
-        ├── agent consumer ──► 纯文本投影（AI 读取）
-        └── editor consumer ─► page data: { bytes, name, ref, version }
+        │  decoded: { doc: {text,name}, anchorMap: text, outline }
+        ├── sidecar ──► 纯文本（AI 读取 / grep）
+        └── presenter ─► page data: { bytes, name, ref, version }
                                    │
                                    ▼
                          DOCX 页面（GenOffice Docs 渲染器）
@@ -60,14 +98,15 @@ DOCX codec（自有 OOXML 解析）
                      window.extension.ura.page.saveBytes(session, bytes)
                                    │
                                    ▼
-                     PageSessions → Ura.write(strict version)
+                     PageSessions → Ura.write → FileTransport
 ```
 
 - **transport**：沿用 WorkStudio 的 `file://` 来源；插件不碰文件系统。
-- **codec**：自有 OOXML 解析生成文本/大纲；`encode` 只接受二进制整篇写回。
-- **projection**：agent 得到文本；editor 得到页面可消费的字节与元数据。
-- **页面保存**：整篇 DOCX 字节走 `saveBytes`，版本冲突返回 base64 基线，
-  页面提示重新打开。GenOffice 的“写路径”交互在这里不存在。
+- **codec**：自有 OOXML 解析生成文本与大纲；`anchorMap` 供 grep / locate。
+- **sidecar**：agent 得到纯文本；页面保存后 agent 重新读取同一份内容。
+- **presenter**：页面数据只包含会话所需的字节与元数据。
+- **页面保存**：整篇 DOCX 字节走 `saveBytes`；页面会话返回 `{ ok, version }`，
+  按资源键串行写入，后写覆盖先写。GenOffice 的“写路径”交互在这里不存在。
 
 ## XLSX：只复用解析引擎，页面自己画
 
@@ -77,15 +116,16 @@ XLSX 不走 GenOffice 的 Univer 外壳，也不依赖 GenOffice 的
 ```
 transport bytes
   → xlsx codec（fflate + fast-xml-parser 读 workbook/sharedStrings/worksheet）
-  → page data: { sheets: [{ id, name, cells: { A1: { value, formula } } }] }
+  → decoded: { doc: { name, sheets }, anchorMap: sheet/cell 文本 }
+  → page data: { bytes, name, ref, version, sheets }
   → WorkStudio 网格页（标签 / 选区 / 公式栏 / 滚动）
-  → agent projection: 按 sheet/row 拼文本
+  → sidecar: 按 sheet/row 拼文本
 ```
 
 页面支持选中单元格后在公式栏改值/公式；保存时由 `src/page/patch.ts`
 直接改 worksheet 的 `<c>` 节点（inlineStr / 数字 / 布尔 / `<f>`），
 其余 ZIP 部件原样保留，再走 `ura.page.saveBytes`。样式、合并、列宽、
-行高、缓存公式值与数字格式已进入投影；图表、透视、条件格式等仍待补。
+行高、缓存公式值与数字格式已进入页面数据；图表、透视、条件格式等仍待补。
 
 ## PPTX：自有 codec + GenOffice 渲染树
 
@@ -94,7 +134,8 @@ PPTX 也分成两层：
 ```
 transport bytes
   → pptx codec（fflate 解 ppt/slides/slideN.xml，抽文本/页数）
-  → page data: { bytes, name, slideCount }
+  → decoded: { doc: { name, slides }, anchorMap: 幻灯片文本, outline }
+  → page data: { bytes, name, ref, version, slideCount }
   → 页面层：@genoffice/pptx-engine openPptx
              @genoffice/pptx-render buildRenderSlide
              自有 SVG 渲染器（形状/图片/表格/图表/文本）
@@ -136,6 +177,7 @@ node scripts/setup-genoffice.mjs
 
 pnpm install
 pnpm build          # codec + 页面
+pnpm verify         # 校验注册面是否符合 WorkStudio 契约
 # 或只构建自有 codec（不需要 GenOffice 子模块）
 pnpm build:codec
 ```
@@ -144,7 +186,7 @@ pnpm build:codec
 
 ```
 packages/docx/dist/
-  ura.js              # 主进程注册入口（含 @genoffice/docx-engine）
+  ura.js              # 主进程注册入口（ESM）
   page/index.html     # 插件页面
   page/assets/…       # GenOffice 渲染器、字体、worker
 ```
@@ -153,15 +195,25 @@ packages/docx/dist/
 
 WorkStudio 侧需要四个接缝（见 `docs/workstudio-integration.md`）：
 
-1. `file` transport 为 OOXML 扩展名给出 `ooxml-*` 格式提示；
-2. 页面会话支持 `saveBytes` / 二进制冲突稿；
+1. `file` transport 按扩展名给出 OOXML MIME；`http(s)` 按 `Content-Type`；
+2. 页面会话支持 `saveBytes`（二进制整篇写回）与 `{ ok, version }` 提交结果；
 3. `app://page` 只编码路径段、保留斜杠，插件页的相对资源才能解析；
 4. 宿主装载外部插件前注入 `globalThis.__workstudioSdk` 注册面。
 
 ```bash
-pnpm install:plugins   # 复制 docx / xlsx 到 ../WorkStudio/src/plugins
-# 或安装到 userData：
-node scripts/install.mjs --target "~/Library/Application Support/WorkStudio/plugins"
+pnpm build && pnpm verify
+
+# 方式一：复制进 WorkStudio 内置插件目录，随应用构建分发
+pnpm install:plugins
+
+# 方式二：安装到用户插件目录（必须位于 plugins/node_modules 下）
+node scripts/install.mjs \
+  --target "~/Library/Application Support/WorkStudio/plugins/node_modules"
+
+# 方式三：在 WorkStudio 的 plugins.md 里声明本地来源（原地加载）
+# - /absolute/path/to/OfficePlugin/packages/docx
+# - /absolute/path/to/OfficePlugin/packages/xlsx
+# - /absolute/path/to/OfficePlugin/packages/pptx
 ```
 
 ## 许可
@@ -177,7 +229,7 @@ node scripts/install.mjs --target "~/Library/Application Support/WorkStudio/plug
 | 打开 | 页面会话投递字节；`openDocx` 不再弹 GenOffice 文件框 | 打开入口归资源面板 |
 | 插入图片 | 页面内文件选择器，读为 base64 后插入 | 保持 |
 | 导出 HTML / Markdown | 已恢复“转换”菜单，走浏览器文件保存 | PDF / 图片导出待补 |
-| 保存 | `saveDocx` → `ura.page.saveBytes`，严格版本写 | 保持；补冲突提示与关闭前 flush |
+| 保存 | `saveDocx` → `ura.page.saveBytes`，页面会话串行写入 | 保持；补关闭前 flush |
 | 另存为 / 新建 | 适配层暂按“保存当前文档”处理 | 改走 WorkStudio 的页面/工作区命令 |
 | 最近文件 | 返回空 | 删除入口，或改用资源索引 |
 | 导出 / 打印 / PDF | 多数为 no-op | 明确能力位；未实现则不暴露入口 |

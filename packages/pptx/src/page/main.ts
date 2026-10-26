@@ -6,7 +6,7 @@
 import { Buffer } from 'buffer'
 import { openPptx, savePptx, type OpenedPptx } from '@genoffice/pptx-engine'
 import { buildRenderSlide, type RenderSlide } from '@genoffice/pptx-render'
-import type { PageSessionInfo } from './env'
+import type { PageCommitResult, PageSessionInfo } from './env'
 import { renderSlideToSvg } from './render'
 
 interface PptxPageData {
@@ -250,12 +250,12 @@ function mount(
       void (async () => {
         try {
           const next = await savePptx(doc)
-          const result = await window.extension.ura.page.saveBytes<{
-            ok: boolean
-            conflict?: unknown
-          }>(sessionId, next)
+          const result = await window.extension.ura.page.saveBytes<PageCommitResult>(
+            sessionId,
+            next,
+          )
           if (!result?.ok) {
-            status.textContent = result?.conflict ? '文件已被外部修改' : '保存失败'
+            status.textContent = '保存失败'
             apply.disabled = false
             return
           }
