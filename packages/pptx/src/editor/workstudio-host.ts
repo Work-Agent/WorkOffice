@@ -1985,6 +1985,101 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
   api.localGeneratePage = async () => null
   api.landGeneratedPages = async () => null
 
+  api.applyTxn = async (op: any) => {
+    const result = runTxn(opened, {
+      ops: op.ops,
+      ...(op.isolation ? { isolation: op.isolation } : {}),
+      ...(op.dryRun ? { dryRun: true } : {}),
+    })
+    if (op.dryRun) {
+      return {
+        applied: false,
+        dryRun: true,
+        ...(result.plan ? { plan: result.plan } : {}),
+        ...(result.failures
+          ? { failures: result.failures.map((f) => ({ index: f.index, error: f.error })) }
+          : {}),
+      }
+    }
+    if (!result.applied) {
+      return {
+        applied: false,
+        ...(result.failures
+          ? { failures: result.failures.map((f) => ({ index: f.index, error: f.error })) }
+          : {}),
+      }
+    }
+    undoStack.push(await savePptx(opened))
+    redoStack.length = 0
+    dirty = true
+    window.extension.bus.send({ type: 'dirty', dirty: true })
+    notifyHistory()
+    slides = buildSlides(opened, FIT_WIDTH)
+    notifyDeck()
+    return {
+      applied: true,
+      records: (result.records ?? []).map((record) => ({
+        op: record.op.op,
+        ...(record.op.target?.slide !== undefined
+          ? { target: `slide:${record.op.target.slide}` }
+          : {}),
+        ...(record.created ? { created: record.created } : {}),
+      })),
+      slides,
+    }
+  }
+
+  api.nativeClipboard = async (kind: 'cut' | 'copy' | 'paste') => {
+    try {
+      if (kind === 'paste') {
+        const text = await navigator.clipboard.readText().catch(() => '')
+        if (text) {
+          document.execCommand('insertText', false, text)
+          return
+        }
+      }
+      document.execCommand(kind)
+    } catch {
+      /* clipboard permission or unsupported */
+    }
+  }
+
+  api.microphoneAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach((track) => track.stop())
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  api.saveRecording = async (op: any) => {
+    const ops: any[] = []
+    for (const slide of op.slides ?? []) {
+      ops.push({
+        op: 'addNarration',
+        target: { slide: slide.slideIndex },
+        bytes: Uint8Array.from(Buffer.from(slide.wavBase64, 'base64')),
+        ext: 'wav',
+        durationMs: slide.durationMs,
+      })
+      ops.push({
+        op: 'setAdvanceTime',
+        target: { slide: slide.slideIndex },
+        ms: slide.advanceMs,
+      })
+    }
+    return ops.length > 0 ? runDeckEdit(ops) : null
+  }
+
+  api.clearNarration = async (indexes: number[]) =>
+    indexes.length > 0
+      ? runDeckEdit(
+          indexes.map((index) => ({ op: 'clearNarration', target: { slide: index } })),
+        )
+      : null
+
   const slidesApi = new Proxy(api, {
     get(target, prop) {
       if (prop in target) return (target as Record<PropertyKey, unknown>)[prop]
