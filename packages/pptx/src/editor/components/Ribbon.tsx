@@ -1120,9 +1120,6 @@ export function Ribbon({
   onZoom,
   showThumbs,
   onToggleThumbs,
-  aiOpen,
-  onToggleAi,
-  onAiPreset,
   onPickShape,
   onInsertImage,
   onFormatBackground,
@@ -1623,7 +1620,6 @@ export function Ribbon({
   )
 
   const tabCtx: RibbonTabCtx = {
-    aiOpen,
     brushMode,
     canDistribute,
     canPaste,
@@ -1647,7 +1643,6 @@ export function Ribbon({
     onAddSection,
     onAddSlide,
     onAddSlideWithLayout,
-    onAiPreset,
     onAlign,
     onDirection,
     onArrange,
@@ -1685,7 +1680,6 @@ export function Ribbon({
     onStrike,
     onTextColor,
     onTextToggle,
-    onToggleAi,
     onToggleFormat,
     onToggleScreenRecord,
     recording,

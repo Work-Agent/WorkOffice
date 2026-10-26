@@ -12,11 +12,11 @@
 | XLSX renderer fork | ✅ `packages/xlsx/src/editor`（285 文件） |
 | PPTX renderer fork | ✅ `packages/pptx/src/editor`（222 文件） |
 | XLSX 接入 WorkStudio | ✅ GenOffice renderer + xlsx-gateway 保存 |
-| PPTX 接入 WorkStudio | ✅ GenOffice renderer + pptx-engine/pptx-ops 保存 |
+| PPTX 接入 WorkStudio | ✅ GenOffice renderer + pptx-engine/pptx-ops 保存；AI 代码已删除 |
 | DOCX 上游同步 | ⏳ 待开始 |
 
 XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
-`tsconfig` 仍暂时排除 `src/editor` / `src/shared`，因为 AI 类型清理尚未完成。
+`tsconfig` 仍暂时排除 `src/editor` / `src/shared`，待类型清理后放开。
 
 ## Phase 1：XLSX
 
@@ -60,7 +60,7 @@ XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
 - [x] 系统剪贴板文本 / 图片跨窗口
 - [x] 演示者视图（单屏模式已验证）
 - [ ] 第二显示器外部观众窗口
-- [ ] AI 代码彻底删除（`ai/`、App AI state）
+- [x] AI 代码彻底删除（`ai/`、AI i18n、App AI state、host AI stub）
 - [ ] 放开 `tsconfig` 排除并清理类型
 
 ## Phase 3：DOCX

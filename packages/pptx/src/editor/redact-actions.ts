@@ -21,7 +21,7 @@
  */
 import type { ActionCtx } from './action-context'
 import type { PictureRenderNode } from '@genoffice/pptx-render'
-import { mediaLabelOf, sanitizeLabel } from './ai/redact'
+import { mediaLabelOf, sanitizeLabel } from './redaction'
 import { applySelectionRedaction, saveEditSelection, selectionRedaction } from './TextEditOverlay'
 
 /** The picture/video/audio shape at `sourceId` on the current slide, if it is one. */

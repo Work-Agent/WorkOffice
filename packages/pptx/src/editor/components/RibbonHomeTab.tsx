@@ -9,9 +9,6 @@ import { useSystemFontFamilies } from '../system-fonts'
 import { useFontCatalog } from '../font-manager'
 import {
   GensparkMark,
-  IconAiBeautify,
-  IconAiFactCheck,
-  IconAiImage,
   IconAlignCenter,
   IconAlignJustify,
   IconAlignLeft,
@@ -79,7 +76,6 @@ const fontPreviewFamily = (f: string): string | undefined =>
 
 export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
   const {
-    aiOpen,
     brushMode,
     canDistribute,
     canPaste,
@@ -101,7 +97,6 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
     onAddSection,
     onAddSlide,
     onAddSlideWithLayout,
-    onAiPreset,
     onAlign,
     onDirection,
     onArrange,
@@ -123,7 +118,6 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
     onStrike,
     onTextColor,
     onTextToggle,
-    onToggleAi,
     onToggleFormat,
     arrangeOpen,
     closePanels,
