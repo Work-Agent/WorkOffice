@@ -23,6 +23,7 @@ import {
   getSlideNotes,
   getSlideTransition,
   listSlideLayouts,
+  materializeSlide,
   openPptx,
   readHeaderFooter,
   savePptx,
@@ -155,7 +156,10 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     slideIndex?: number,
   ): RenderSlide | null => {
     const result = runTxn(opened, { ops })
-    if (!result.applied) return null
+    if (!result.applied) {
+      console.warn('[pptx] transaction rejected', result.failures)
+      return null
+    }
     dirty = true
     window.extension.bus.send({ type: 'dirty', dirty: true })
     notifyHistory()
@@ -194,6 +198,73 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       return null
     }
     return rendered
+  }
+
+  const runStructuralEdit = async (
+    ops: any[],
+    slideIndex: number,
+  ): Promise<RenderSlide | null> => {
+    undoStack.push(await savePptx(opened))
+    redoStack.length = 0
+    const result = runTxn(opened, { ops })
+    if (!result.applied) {
+      undoStack.pop()
+      return null
+    }
+    dirty = true
+    window.extension.bus.send({ type: 'dirty', dirty: true })
+    notifyHistory()
+    if (!materializeSlide(opened, slideIndex)) {
+      undoStack.pop()
+      return null
+    }
+    return rebuildSlide(slideIndex)
+  }
+
+  const elementIndex = (slideIndex: number, sourceId: string): number => {
+    const slide = opened.deck.slides[slideIndex]
+    return slide ? slide.elements.findIndex((el) => el.id === sourceId) : -1
+  }
+
+  const chartData = (slideIndex: number, sourceId: string) => {
+    const slide: any = opened.deck.slides[slideIndex]
+    const el = slide?.elements?.find((item: any) => item.id === sourceId && item.type === 'chart')
+    if (!el) return null
+    const chart = el.chart
+    return {
+      kind: chart.kind,
+      title: chart.title ?? '',
+      categories: [...chart.categories],
+      series: chart.series.map((s: any) => ({
+        name: s.name ?? '',
+        values: s.values.map((v: number | null) => v ?? 0),
+      })),
+      seriesColors: chart.series.map((s: any) => s.color),
+      pointColors: chart.series.map((s: any) => s.pointColors),
+    }
+  }
+
+  const CHART_SCHEME_LIST = [
+    { key: 'default', label: '默认配色', colors: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000'] },
+    { key: 'blue', label: '蓝色', colors: ['#2E75B6', '#4472C4', '#5B9BD5', '#70AD47'] },
+    { key: 'warm', label: '暖色', colors: ['#ED7D31', '#FFC000', '#FF0000', '#C55A11'] },
+    { key: 'cool', label: '冷色', colors: ['#0070C0', '#00B0F0', '#00B0A0', '#7030A0'] },
+    { key: 'mono', label: '单色', colors: ['#404040', '#666666', '#888888', '#AAAAAA'] },
+  ]
+
+  const chartSchemeColors = (key: string): string[] | undefined => {
+    if (!key || key === 'default') return undefined
+    const named = CHART_SCHEME_LIST.find((s) => s.key === key)
+    if (named) return named.colors
+    if (key === 'colorful') return ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
+    if (key === 'colorful2') return ['#264478', '#9E480E', '#636363', '#997300', '#255E91', '#43682B']
+    const mono = /^mono-accent(\d)$/.exec(key)
+    if (mono) {
+      const accents = ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
+      const base = accents[Number(mono[1]) - 1] ?? accents[0]!
+      return [base, base + 'CC', base + '99', base + '66']
+    }
+    return undefined
   }
 
   const toEmu = (px: number, fitWidthPx: number): number => {
@@ -379,8 +450,8 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       })),
     getLink: async (slideIndex: number, sourceId: string) =>
       getElementLink(opened, slideIndex, sourceId),
-    getChartData: async () => null,
-    getChartColorSchemes: async () => [],
+    getChartData: async (slideIndex: number, sourceId: string) => chartData(slideIndex, sourceId),
+    getChartColorSchemes: async () => CHART_SCHEME_LIST,
     addComment: async () => null,
     deleteComment: async () => null,
     getComments: async () => [],
@@ -497,6 +568,82 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     return next
       ? { slides: next, index: op.before ? op.sourceIndex : op.sourceIndex + 1 }
       : null
+  }
+
+  api.addSlideWithLayout = async (op: any) => {
+    const ops: any[] = [
+      {
+        op: 'addSlideWithLayout',
+        target: { slide: op.sourceIndex },
+        layoutPath: op.layoutPath,
+      },
+    ]
+    if (op.before) {
+      ops.push({ op: 'moveSlide', target: { slide: op.sourceIndex + 1 }, to: op.sourceIndex })
+    }
+    const next = await runDeckEdit(ops)
+    const index = op.before ? op.sourceIndex : op.sourceIndex + 1
+    return next ? { slides: next, index } : null
+  }
+
+  api.moveSlide = async (op: any) => {
+    const next = await runDeckEdit([
+      { op: 'moveSlide', target: { slide: op.fromIndex }, to: op.toIndex },
+    ])
+    return next ? { slides: next, index: op.toIndex } : null
+  }
+
+  api.moveSlides = async (op: any) => {
+    const indexes = [...new Set(op.slideIndexes as number[])].sort((a, b) => a - b)
+    if (!indexes.length) return null
+    const ops: any[] = []
+    let insertAt = op.insertAt
+    for (const index of indexes) {
+      ops.push({ op: 'moveSlide', target: { slide: index }, to: insertAt })
+      insertAt += 1
+    }
+    const next = await runDeckEdit(ops)
+    return next ? { slides: next, sections: getSections(opened) } : null
+  }
+
+  api.moveSection = async (op: any) => {
+    const next = await runDeckEdit([{ op: 'moveSection', id: op.id, dir: op.dir }])
+    return next ? { slides: next, sections: getSections(opened) } : null
+  }
+
+  api.removeSectionSlides = async (op: any) => {
+    const total = opened.deck.slides.length
+    const sections = getSections(opened)
+    let removed: number[] = []
+    if (op.id == null) {
+      const covered = new Set(sections.flatMap((s) => s.slideIndices))
+      const first = sections.length
+        ? Math.min(...sections.flatMap((s) => s.slideIndices))
+        : total
+      removed = Array.from({ length: first }, (_, i) => i).filter((i) => !covered.has(i))
+    } else {
+      const target = sections.find((s) => s.id === op.id)
+      if (!target) return null
+      removed = [...target.slideIndices]
+    }
+    if (!removed.length || removed.length >= total) return null
+    const removedSet = new Set(removed)
+    const shifted = (i: number) => i - removed.filter((r) => r < i).length
+    const rebuilt = sections
+      .filter((s) => s.id !== op.id)
+      .map((s) => ({
+        ...s,
+        slideIndices: s.slideIndices
+          .filter((i) => !removedSet.has(i))
+          .map((i) => shifted(i)),
+      }))
+      .filter((s) => s.slideIndices.length > 0)
+    const ops: any[] = removed
+      .sort((a, b) => b - a)
+      .map((i) => ({ op: 'deleteSlide', target: { slide: i } }))
+    ops.push({ op: 'setSections', sections: rebuilt })
+    const next = await runDeckEdit(ops)
+    return next ? { slides: next, sections: getSections(opened) } : null
   }
 
   api.deleteSlide = async (slideIndex: number) =>
@@ -875,8 +1022,15 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     return next
   }
 
-  const newSourceId = (slideIndex: number, before: Set<string>, slide?: RenderSlide | null) =>
-    (slide ?? slides[slideIndex])?.nodes.find((n) => !before.has(n.sourceId))?.sourceId
+  const newSourceId = (
+    slideIndex: number,
+    before: Set<string>,
+    slide?: RenderSlide | null,
+    type?: string,
+  ) =>
+    (slide ?? slides[slideIndex])?.nodes.find(
+      (n) => !before.has(n.sourceId) && (!type || n.type === type),
+    )?.sourceId
 
   const pickFile = (accept: string) =>
     new Promise<{ name: string; base64: string; ext: string; bytes: Uint8Array } | null>(
@@ -962,7 +1116,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       ],
       op.slideIndex,
     )
-    const sourceId = newSourceId(op.slideIndex, before, slide)
+    const sourceId = newSourceId(op.slideIndex, before, slide, 'table')
     return slide && sourceId ? { slide, sourceId } : null
   }
 
@@ -988,7 +1142,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       ],
       op.slideIndex,
     )
-    const sourceId = newSourceId(op.slideIndex, before, slide)
+    const sourceId = newSourceId(op.slideIndex, before, slide, 'chart')
     return slide && sourceId ? { slide, sourceId } : null
   }
 
@@ -1036,7 +1190,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       ],
       op.slideIndex,
     )
-    const sourceId = newSourceId(op.slideIndex, before, slide)
+    const sourceId = newSourceId(op.slideIndex, before, slide, 'picture')
     return slide && sourceId ? { slide, sourceId } : { error: 'unsupported', ext: op.ext }
   }
 
@@ -1722,19 +1876,134 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       op.slideIndex,
     )
 
-  const editingMethods = [
-    'editConnectorEndpoints',
-    'editPictureSrcRect',
-    'editPictureOpacity',
-    'editImageFill',
-    'removeSectionSlides',
-    'moveSection',
-    'audienceNav',
-    'audienceReady',
-    'localGeneratePage',
-    'landGeneratedPages',
-  ]
-  for (const method of editingMethods) api[method] = async () => null
+  api.editConnectorEndpoints = async (op: any) =>
+    runEdit(
+      [
+        {
+          op: 'setConnectorEndpoints',
+          target: { slide: op.slideIndex, el: op.sourceId },
+          p1: {
+            x: toEmuWith(op.fitWidthPx, op.x1Px),
+            y: toEmuWith(op.fitWidthPx, op.y1Px),
+          },
+          p2: {
+            x: toEmuWith(op.fitWidthPx, op.x2Px),
+            y: toEmuWith(op.fitWidthPx, op.y2Px),
+          },
+          ...(op.start !== undefined ? { start: op.start } : {}),
+          ...(op.end !== undefined ? { end: op.end } : {}),
+        },
+      ],
+      op.slideIndex,
+    )
+
+  api.editPictureSrcRect = async (op: any) =>
+    runEdit(
+      [
+        {
+          op: 'setPictureSrcRect',
+          target: { slide: op.slideIndex, el: op.sourceId },
+          srcRect: op.srcRect ?? null,
+          ...(op.boxPx
+            ? {
+                box: {
+                  x: toEmuWith(op.fitWidthPx, op.boxPx.x),
+                  y: toEmuWith(op.fitWidthPx, op.boxPx.y),
+                  cx: toEmuWith(op.fitWidthPx, op.boxPx.w),
+                  cy: toEmuWith(op.fitWidthPx, op.boxPx.h),
+                },
+              }
+            : {}),
+        },
+      ],
+      op.slideIndex,
+    )
+
+  api.editImageFill = async (op: any) => {
+    const source = op.source ?? (await api.pickPictureFile())
+    if (!source) return null
+    return runEdit(
+      op.targets.map((target: any) => ({
+        op: 'setImageFill',
+        target: { slide: op.slideIndex, el: target.sourceId },
+        source: {
+          bytes: Uint8Array.from(Buffer.from(source.base64, 'base64')),
+          ext: source.ext,
+        },
+        tile: op.mode === 'tile',
+        ...(target.groupId ? { group: target.groupId } : {}),
+      })),
+      op.slideIndex,
+    )
+  }
+
+  api.editTableStyle = async (op: any) => {
+    const elIndex = elementIndex(op.slideIndex, op.sourceId)
+    if (elIndex < 0) return null
+    const rendered = await runStructuralEdit(
+      [
+        {
+          op: 'setTableStyle',
+          target: { slide: op.slideIndex, el: op.sourceId },
+          ...(op.styleName != null ? { styleName: op.styleName } : {}),
+          ...(op.firstRow != null ? { firstRow: op.firstRow } : {}),
+          ...(op.bandRow != null ? { bandRow: op.bandRow } : {}),
+          ...(op.rtl != null ? { rtl: op.rtl } : {}),
+          ...(op.shadingColor != null ? { shadingColor: op.shadingColor } : {}),
+          ...(op.borderColor != null ? { borderColor: op.borderColor } : {}),
+          ...(op.borderWidthPt != null ? { borderWidthPt: op.borderWidthPt } : {}),
+          ...(op.borderPreset != null ? { borderPreset: op.borderPreset } : {}),
+          ...(op.cells != null ? { cells: op.cells } : {}),
+        },
+      ],
+      op.slideIndex,
+    )
+    if (!rendered) return null
+    const sourceId = opened.deck.slides[op.slideIndex]?.elements[elIndex]?.id ?? null
+    return { slide: rendered, sourceId }
+  }
+
+  api.editChart = async (op: any) => {
+    const elIndex = elementIndex(op.slideIndex, op.sourceId)
+    if (elIndex < 0) return null
+    const patch: any = {}
+    for (const key of [
+      'kind',
+      'categories',
+      'series',
+      'title',
+      'legendPos',
+      'dataLabels',
+      'gridlines',
+      'catAxisTitle',
+      'valAxisTitle',
+      'gapWidthPct',
+      'switchRowCol',
+      'pointColors',
+    ]) {
+      if (op[key] !== undefined) patch[key] = op[key]
+    }
+    if (patch.kind === 'barH') {
+      patch.kind = 'bar'
+      patch.barDir = 'bar'
+    }
+    if (op.colorScheme !== undefined) {
+      const colors = chartSchemeColors(op.colorScheme)
+      if (colors) patch.colorScheme = colors
+    }
+    const rendered = await runStructuralEdit(
+      [{ op: 'setChart', target: { slide: op.slideIndex, el: op.sourceId }, patch }],
+      op.slideIndex,
+    )
+    if (!rendered) return null
+    const sourceId = opened.deck.slides[op.slideIndex]?.elements[elIndex]?.id ?? null
+    return { slide: rendered, sourceId }
+  }
+
+  api.audienceNav = async () => null
+  api.audienceReady = async () => null
+  api.localGeneratePage = async () => null
+  api.landGeneratedPages = async () => null
 
   const slidesApi = new Proxy(api, {
     get(target, prop) {
