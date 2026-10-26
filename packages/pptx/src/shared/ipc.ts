@@ -13,7 +13,6 @@ import type { CustGeomPathCmd, SlideComment, SectionInfo } from '@genoffice/pptx
 import type { FontSizeStep } from '@genoffice/pptx-ops/font-size'
 // the font catalog's shape is the store's to declare, not a copy kept in step by hand
 import type { CatalogEntry as FontCatalogEntry } from '@genoffice/electron-utils/font-store'
-import type { LayoutSkeleton } from '../renderer/ai/layout-skeleton'
 import type {
   AiSettings,
   AiStreamChunk,
@@ -1823,8 +1822,6 @@ export interface SlidesApi {
       topic: string
       styleSkill: string
       createdAt: string
-      /** Deck chrome skeleton extracted at save time (layout-skeleton.ts); absent in older templates */
-      layout?: LayoutSkeleton
     },
   ) => Promise<{ ok: boolean; error?: string }>
   /** List saved Style templates */
@@ -1834,7 +1831,6 @@ export interface SlidesApi {
     ok: boolean
     styleSkill?: string
     topic?: string
-    layout?: LayoutSkeleton
     error?: string
   }>
   /** New blank page (with a specific layout): inserted after slide sourceIndex, rels pointing at the chosen layout */

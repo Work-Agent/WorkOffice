@@ -91,7 +91,7 @@ function buildSlides(opened: OpenedPptx, fitWidthPx: number): RenderSlide[] {
 
 async function digest(bytes: Uint8Array): Promise<string> {
   try {
-    const hash = await crypto.subtle.digest('SHA-256', bytes)
+    const hash = await crypto.subtle.digest('SHA-256', bytes as BufferSource)
     return [...new Uint8Array(hash)]
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
@@ -341,7 +341,6 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     onAutoSaveDefaultChanged: () => () => {},
     setAutoSavePref: () => {},
     onChromePressed: () => () => {},
-    setShowFullScreen: async () => {},
 
     // 打开 / 渲染
     consumePendingOpen: (fitWidthPx: number) => openResult(fitWidthPx),
@@ -1988,7 +1987,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
 
   const slidesApi = new Proxy(api, {
     get(target, prop) {
-      if (prop in target) return target[prop]
+      if (prop in target) return (target as Record<PropertyKey, unknown>)[prop]
       if (typeof prop === 'string' && prop.startsWith('on')) {
         return () => () => {}
       }
@@ -2007,7 +2006,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     safeExternalUrl: (url: string) => url,
   }, {
     get(target, prop) {
-      if (prop in target) return target[prop]
+      if (prop in target) return (target as Record<PropertyKey, unknown>)[prop]
       if (typeof prop === 'string' && prop.startsWith('on')) return () => () => {}
       return async () => null
     },

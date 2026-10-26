@@ -74,7 +74,7 @@ async function bootstrap(): Promise<void> {
     }
   })
 
-  createRoot(root).render(
+  createRoot(root as HTMLElement).render(
     <React.StrictMode>
       <LocaleProvider initial={lang}>
         <App />

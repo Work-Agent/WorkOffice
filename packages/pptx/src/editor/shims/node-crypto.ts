@@ -5,7 +5,7 @@ export function createHash(algorithm: string) {
   if (algorithm.toLowerCase() !== 'sha256') {
     throw new Error(`Unsupported hash in page: ${algorithm}`)
   }
-  let data = new Uint8Array()
+  let data: Uint8Array<ArrayBufferLike> = new Uint8Array()
   return {
     update(input: string | Uint8Array) {
       const bytes =
@@ -15,7 +15,7 @@ export function createHash(algorithm: string) {
     },
     digest(encoding?: string): string | Uint8Array {
       const hash = sha256(data)
-      return encoding === 'hex' ? bytesToHex(hash) : hash
+      return encoding === 'hex' ? bytesToHex(hash) : (hash as Uint8Array<ArrayBuffer>)
     },
   }
 }

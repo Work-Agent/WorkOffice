@@ -16,7 +16,7 @@
 | DOCX 上游同步 | ⏳ 待开始 |
 
 XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
-`tsconfig` 仍暂时排除 `src/editor` / `src/shared`，待类型清理后放开。
+两个包的 `tsconfig` 已纳入 `src/editor` / `src/shared`，`pnpm typecheck` 覆盖 renderer。
 
 ## Phase 1：XLSX
 
@@ -31,6 +31,8 @@ XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
 - [x] 页面入口改为渲染 `src/editor/App`
 - [x] 运行时验证：Ribbon / 网格 / 双击编辑 / 保存
 - [x] 样式写回验证（`xl/styles.xml` + cell `s=`）
+- [x] 保存改用完整 `planCellEditsToXlsx` 参数（视觉/表格/透视/主题/保护/单元格图片不再丢失）
+- [x] `tsconfig` 纳入 `src/editor` / `src/shared` 并通过 typecheck
 - [ ] AI 代码彻底删除（`ai/`、App AI state）
 
 ## Phase 2：PPTX
@@ -61,7 +63,7 @@ XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
 - [x] 演示者视图（单屏模式已验证）
 - [ ] 第二显示器外部观众窗口
 - [x] AI 代码彻底删除（`ai/`、AI i18n、App AI state、host AI stub）
-- [ ] 放开 `tsconfig` 排除并清理类型
+- [x] `tsconfig` 纳入 `src/editor` / `src/shared` 并通过 typecheck
 
 ## Phase 3：DOCX
 

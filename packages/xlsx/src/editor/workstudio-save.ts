@@ -2,10 +2,14 @@
 //
 // App 的 WorkbookSaveRequest 与 GenOffice 主进程的 saveWorkbookViaSidecar
 // 同构。这里把 sheetId 映射成 sheetName，然后调用纯 TS 的
-// applyCellEditsToXlsx，避免依赖 Electron main / native sidecar。
+// planCellEditsToXlsx + assembleWithJsZip，避免依赖 Electron main / native sidecar。
 
 import { Buffer } from 'buffer'
-import { applyCellEditsToXlsx } from '@genoffice/xlsx-gateway/gateway/xlsx-gateway'
+import {
+  assembleWithJsZip,
+  createBufferEntrySource,
+  planCellEditsToXlsx,
+} from '@genoffice/xlsx-gateway/gateway/xlsx-gateway'
 
 function resolveSheetName(
   sheetId: string,
@@ -227,35 +231,39 @@ export async function saveWorkbookEdits(
     relayout: update.relayout,
   }))
 
-  const mutation = await applyCellEditsToXlsx(
-    Buffer.from(source),
-    edits,
-    structuralOps,
-    request.chartEdits ?? [],
-    sheetPlan,
-    filterStates,
-    hyperlinkEdits,
-    cfStates,
-    dvStates,
-    sheetProtections,
-    request.definedNamesState ?? null,
-    visualAdditions,
-    pageSetupStates,
-    noteStates,
-    tableAdditions,
-    pivotAdditions,
-    request.pivotCacheRefreshPaths ?? [],
-    pivotRefreshUpdates,
-    request.visualEdits ?? [],
-    sparklineAdditions,
-    formulaValues,
-    request.themeState ?? null,
-    request.workbookProtectionState ?? null,
-    protectedRangeStates,
-    bulkConstantFills,
-    tabColorStates,
-    tableEdits,
-    cellImageAdditions,
+  const sourceBuffer = Buffer.from(source)
+  const mutation = await assembleWithJsZip(
+    sourceBuffer,
+    await planCellEditsToXlsx(
+      await createBufferEntrySource(sourceBuffer),
+      edits,
+      structuralOps,
+      request.chartEdits ?? [],
+      sheetPlan,
+      filterStates,
+      hyperlinkEdits,
+      cfStates,
+      dvStates,
+      sheetProtections,
+      request.definedNamesState ?? null,
+      visualAdditions,
+      pageSetupStates,
+      noteStates,
+      tableAdditions,
+      pivotAdditions,
+      request.pivotCacheRefreshPaths ?? [],
+      pivotRefreshUpdates,
+      request.visualEdits ?? [],
+      sparklineAdditions,
+      formulaValues,
+      request.themeState ?? null,
+      request.workbookProtectionState ?? null,
+      protectedRangeStates,
+      bulkConstantFills,
+      tabColorStates,
+      tableEdits,
+      cellImageAdditions,
+    ),
   )
 
   const nextFile = {
@@ -266,6 +274,6 @@ export async function saveWorkbookEdits(
   return {
     bytes: new Uint8Array(mutation.buffer),
     file: nextFile,
-    touchedEntries: mutation.touchedEntries,
+    touchedEntries: [...mutation.touchedEntries],
   }
 }

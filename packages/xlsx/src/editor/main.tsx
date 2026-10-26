@@ -100,7 +100,7 @@ async function bootstrap(): Promise<void> {
   })
 
   await loadCellFonts()
-  ReactDOM.createRoot(root).render(
+  ReactDOM.createRoot(root as HTMLElement).render(
     <LocaleProvider initial={lang}>
       <App queuedWorkbookAtBoot={false} />
     </LocaleProvider>,
