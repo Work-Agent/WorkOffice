@@ -116,6 +116,12 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
   let masterSlide: any = null
   let masterItems: any[] = []
   const masterParsed = new Map<string, any>()
+  let pipWindow: any = null
+  let pipDeck: string[] = []
+  let pipState: any = null
+  let pipStrokes: Array<{ color: string; points: Array<{ x: number; y: number }> }> = []
+  let pipLaser: { x: number; y: number } | null = null
+  const audienceNavHandlers = new Set<(action: 'next' | 'prev' | 'exit') => void>()
   const openedHandlers = new Set<(result: any) => void>()
   const historyHandlers = new Set<(state: { canUndo: boolean; canRedo: boolean }) => void>()
   const deckHandlers = new Set<(state: any) => void>()
@@ -1986,16 +1992,178 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     return { slide: rendered, sourceId }
   }
 
-  api.presenterStart = async () => ({ audience: false })
-  api.presenterEnd = async () => {}
-  api.presenterSync = () => {}
-  api.presenterInk = () => {}
-  api.presenterSwap = async () => false
+  const emitAudienceNav = (action: 'next' | 'prev' | 'exit'): void => {
+    for (const handler of audienceNavHandlers) handler(action)
+  }
+
+  const drawPipInk = (): void => {
+    const doc = pipWindow?.document
+    if (!doc) return
+    const canvas = doc.getElementById('audience-ink') as HTMLCanvasElement | null
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const w = canvas.width
+    const h = canvas.height
+    ctx.clearRect(0, 0, w, h)
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    for (const stroke of pipStrokes) {
+      if (stroke.points.length < 2) continue
+      ctx.strokeStyle = stroke.color
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      stroke.points.forEach((point, index) => {
+        const x = point.x * w
+        const y = point.y * h
+        if (index === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+    }
+    if (pipLaser && pipLaser.x >= 0) {
+      ctx.fillStyle = '#e53935'
+      ctx.beginPath()
+      ctx.arc(pipLaser.x * w, pipLaser.y * h, 9, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  const renderPip = (): void => {
+    const doc = pipWindow?.document
+    if (!doc) return
+    const img = doc.getElementById('audience-slide') as HTMLImageElement | null
+    if (!img) return
+    doc.body.style.background = pipState?.white ? '#fff' : '#000'
+    if (pipState?.black || pipState?.white) {
+      img.style.visibility = 'hidden'
+    } else {
+      img.style.visibility = 'visible'
+      const png = pipDeck[pipState?.idx ?? 0]
+      if (png) img.src = `data:image/png;base64,${png}`
+    }
+    drawPipInk()
+  }
+
+  api.presenterStart = async () => {
+    if (pipWindow) return { audience: true }
+    const pip = (window as any).documentPictureInPicture
+    if (!pip?.requestWindow) return { audience: false }
+    try {
+      const win = await pip.requestWindow({
+        width: Math.min(1280, window.screen.availWidth),
+        height: Math.min(720, window.screen.availHeight),
+      })
+      pipWindow = win
+      const doc = win.document
+      doc.title = '观众视图'
+      doc.body.style.cssText = 'margin:0;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;'
+      const img = doc.createElement('img')
+      img.id = 'audience-slide'
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;'
+      const canvas = doc.createElement('canvas')
+      canvas.id = 'audience-ink'
+      canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;'
+      doc.body.append(img, canvas)
+      const resize = (): void => {
+        canvas.width = win.innerWidth
+        canvas.height = win.innerHeight
+        drawPipInk()
+      }
+      resize()
+      win.addEventListener('resize', resize)
+      win.addEventListener('pagehide', () => {
+        pipWindow = null
+        pipDeck = []
+        pipState = null
+        pipStrokes = []
+        pipLaser = null
+      })
+      doc.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+          event.preventDefault()
+          emitAudienceNav('next')
+        } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+          event.preventDefault()
+          emitAudienceNav('prev')
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          emitAudienceNav('exit')
+        }
+      })
+      doc.addEventListener('click', (event: MouseEvent) => {
+        if ((event.target as HTMLElement | null)?.id === 'audience-slide') emitAudienceNav('next')
+      })
+      renderPip()
+      return { audience: true }
+    } catch {
+      pipWindow = null
+      return { audience: false }
+    }
+  }
+
+  api.presenterDeck = (pngs: string[]) => {
+    pipDeck = pngs
+    renderPip()
+  }
+
+  api.presenterEnd = async () => {
+    try {
+      pipWindow?.close()
+    } catch {
+      /* already closed */
+    }
+    pipWindow = null
+    pipDeck = []
+    pipState = null
+    pipStrokes = []
+    pipLaser = null
+  }
+
+  api.presenterSync = (state: any) => {
+    pipState = state
+    renderPip()
+  }
+
+  api.presenterInk = (event: any) => {
+    if (event.type === 'clear') {
+      pipStrokes = []
+      pipLaser = null
+    } else if (event.type === 'stroke-start') {
+      pipStrokes.push({ color: event.color ?? '#e53935', points: [{ x: event.x, y: event.y }] })
+      pipLaser = null
+    } else if (event.type === 'stroke-move') {
+      pipStrokes.at(-1)?.points.push({ x: event.x, y: event.y })
+    } else if (event.type === 'laser') {
+      pipLaser = event.x < 0 ? null : { x: event.x, y: event.y }
+    }
+    drawPipInk()
+  }
+
+  api.presenterSwap = async () => {
+    if (!pipWindow) return false
+    try {
+      const screens = await (window as any).getScreenDetails?.()
+      if (!screens?.screens?.length) return false
+      const current = pipWindow.screen
+      const other = screens.screens.find((screen: any) => screen !== current)
+      if (!other) return false
+      pipWindow.moveTo(other.availLeft, other.availTop)
+      pipWindow.resizeTo(other.availWidth, other.availHeight)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   api.audienceNav = () => {}
-  api.audienceReady = async () => null
+  api.audienceReady = async () => pipState
   api.onShowSync = () => () => {}
   api.onShowInk = () => () => {}
-  api.onAudienceNav = () => () => {}
+  api.onAudienceNav = (handler: (action: 'next' | 'prev' | 'exit') => void) => {
+    audienceNavHandlers.add(handler)
+    return () => audienceNavHandlers.delete(handler)
+  }
   api.localGeneratePage = async () => null
   api.landGeneratedPages = async () => null
 

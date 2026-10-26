@@ -32,6 +32,7 @@ import {
   type ShowScreen,
 } from '../show-keys'
 import { liftShowCurtain } from '../show-actions'
+import { renderSlidesToPngBase64 } from '../export-render'
 
 /** Layout constants (aligned with styles.css) */
 const IS_MAC = navigator.platform.toLowerCase().includes('mac')
@@ -155,6 +156,20 @@ export function PresenterView({
       void window.slidesApi.presenterEnd()
     }
   }, [])
+
+  // Document PiP audience window: render the deck once, then drive it with sync state.
+  useEffect(() => {
+    if (!hasAudience) return
+    let cancelled = false
+    void renderSlidesToPngBase64(slides, images, 1).then((pngs) => {
+      if (!cancelled) window.slidesApi.presenterDeck(pngs)
+    })
+    return () => {
+      cancelled = true
+    }
+    // The deck is fixed while presenting; re-rendering on every animation tick would be wasteful.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAudience])
 
   // Broadcast show state: epoch change = the new page's animations are loaded and loadedRef matches the player cursor
   useEffect(() => {

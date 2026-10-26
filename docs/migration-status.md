@@ -63,7 +63,7 @@ XLSX / PPTX 页面入口均已切到 `src/editor`，旧 `src/page` 已删除。
 - [x] 元素复制 / 粘贴 / 复制副本
 - [x] 系统剪贴板文本 / 图片跨窗口
 - [x] 演示者视图（单屏模式已验证）
-- [ ] 第二显示器外部观众窗口
+- [x] 独立观众窗口（Document PiP；可手动移到第二显示器，自动全屏/显示器交换受浏览器权限限制）
 - [x] AI 代码彻底删除（`ai/`、AI i18n、App AI state、host AI stub）
 - [x] `tsconfig` 纳入 `src/editor` / `src/shared` 并通过 typecheck
 

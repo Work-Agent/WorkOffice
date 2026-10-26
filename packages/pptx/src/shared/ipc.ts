@@ -1854,6 +1854,8 @@ export interface SlidesApi {
   // ── Presenter-view multi-screen show ────────────────────────────────
   /** Enter presenter view: detects multiple displays and opens a fullscreen audience show window on the external screen (sharing this session's document) */
   presenterStart: () => Promise<{ audience: boolean }>
+  /** Hand the rendered page bitmaps to the audience window (Document PiP) */
+  presenterDeck: (pngsBase64: string[]) => void
   /** Broadcast show state to the audience window (fire-and-forget) */
   presenterSync: (state: ShowSyncState) => void
   /** Broadcast ink/laser events to the audience window */
