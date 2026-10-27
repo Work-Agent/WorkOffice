@@ -1,7 +1,7 @@
 {
   "name": "@workstudio/plugin-pptx",
   "version": "0.1.0",
-  "description": "PPTX 阅读与编辑：自有 OOXML codec + GenOffice Slides renderer",
+  "description": "PPTX 编辑：GenOffice Slides renderer + pptx-engine/pptx-ops 写回",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,
@@ -13,7 +13,8 @@
     "id": "pptx",
     "label": "PowerPoint 演示文稿",
     "icon": "presentation",
-    "page": "dist/page/index.html"
+    "page": "dist/page/index.html",
+    "apiVersion": 1
   },
   "scripts": {
     "build": "pnpm build:ura && pnpm build:page",

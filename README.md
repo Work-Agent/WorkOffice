@@ -65,16 +65,29 @@ pnpm build:docx
 pnpm build:codec    # 只构建 ura.js
 ```
 
-安装到 WorkStudio：
+打包 / 安装：
 
 ```bash
-# 内置插件目录（随 WorkStudio 构建分发）
+# 生成三个可安装 zip（release/<id>-<version>.zip + sha256）
+pnpm pack:plugins
+
+# 开发用：直接安装到当前用户的插件目录
+#   macOS: ~/Library/Application Support/WorkStudio/plugins/installed/<id>
 pnpm install:plugins
 
-# 用户插件目录
-node scripts/install.mjs \
-  --target "~/Library/Application Support/WorkStudio/plugins/node_modules"
+# 随 WorkStudio 源码构建的内置插件目录（仅开发/内置分发）
+pnpm install:builtin
 ```
+
+WorkStudio 新插件机制：
+
+- **zip**：一个 zip 只装一个插件，安装到 `<userData>/plugins/installed/<id>/`；
+  远程 zip 必须在 registry.md 的 URL 里带 `sha256`。
+- **本地目录**：在 WorkStudio 设置 → 插件中填绝对路径，原地加载，不复制；
+  适合开发。
+- zip / 本地目录安装后都需要**重启 WorkStudio**才会装载。
+- zip 自包含，不执行 `npm install`；构建产物只包含 `package.json` 与 `dist/`。
+- `pnpm install:plugins` 直接复制到 `installed/` 是开发快捷方式；需要来源、卸载和安装状态时，用 WorkStudio 设置 → 插件添加本地目录或 zip。
 
 ## 运行时约束
 
@@ -83,6 +96,7 @@ node scripts/install.mjs \
 - XLSX 保存使用完整 `planCellEditsToXlsx` 参数，不能调用会丢字段的旧包装；
 - PPTX 保存后重新 `openPptx(bytes)`，刷新元素 id 与字节锚点；
 - 页面不依赖 AI 包；XLSX / PPTX 的 AI 代码已删除。
+- 插件清单声明 `workstudio.apiVersion: 1`；一个 zip 只包含一个 `package.json`。
 
 ## 已知边界
 

@@ -11,12 +11,15 @@
     "typecheck": "pnpm --filter './packages/*' typecheck",
     "clean": "pnpm --filter './packages/*' clean",
     "setup": "node scripts/setup-genoffice.mjs && pnpm install",
-    "install:plugins": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
+    "install:plugins": "node scripts/install.mjs",
     "build:codec": "pnpm --filter './packages/*' build:ura",
-    "verify": "node scripts/verify-contract.mjs"
+    "verify": "node scripts/verify-contract.mjs",
+    "install:builtin": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
+    "pack:plugins": "node scripts/pack.mjs"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "fflate": "^0.8.2"
   },
   "packageManager": "pnpm@10.18.0"
 }

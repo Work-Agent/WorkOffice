@@ -554,12 +554,22 @@ pnpm build          # codec + 页面 bundle
 pnpm verify         # URA codec / presenter / sidecar 契约
 ```
 
-安装到 WorkStudio 用户插件目录：
+打包与安装：
 
 ```bash
-node scripts/install.mjs \
-  --target "$HOME/Library/Application Support/WorkStudio/plugins/node_modules"
+pnpm pack:plugins   # release/<id>-<version>.zip + sha256
+pnpm install:plugins # <userData>/plugins/installed/<id>（开发）
+pnpm install:builtin # WorkStudio 源码内置插件目录（仅开发）
 ```
+
+WorkStudio 的插件装载是新机制：
+
+- 插件是自包含目录，`package.json` 的 `workstudio` 声明
+  `id / label / icon / page / apiVersion`，`exports["./ura"]` 是 ESM 注册入口；
+- 远程只接受 zip，一个 zip 只装一个插件，安装到
+  `<userData>/plugins/installed/<id>/`；URL 必须带 `sha256`；
+- 本地目录原地加载，不复制，适合开发；
+- 安装后重启 WorkStudio 才装载；安装时不执行 npm install。
 
 运行态最低验收：
 

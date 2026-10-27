@@ -13,7 +13,8 @@
     "id": "docx",
     "label": "Word 文档",
     "icon": "file-text",
-    "page": "dist/page/index.html"
+    "page": "dist/page/index.html",
+    "apiVersion": 1
   },
   "scripts": {
     "build": "pnpm build:ura && pnpm build:page",
