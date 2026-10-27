@@ -571,6 +571,10 @@ WorkStudio 的插件装载是新机制：
 - 本地目录原地加载，不复制，适合开发；
 - 安装后重启 WorkStudio 才装载；安装时不执行 npm install。
 
+发布由 `.github/workflows/release.yml` 完成：推送 `v*` tag 后，在
+GitHub Actions 中构建、打包、生成 sha256 与 `registry.md`，创建 GitHub
+Release。普通分支/PR 由 `.github/workflows/ci.yml` 构建并上传 artifact。
+
 运行态最低验收：
 
 ```text

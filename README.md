@@ -89,6 +89,34 @@ WorkStudio 新插件机制：
 - zip 自包含，不执行 `npm install`；构建产物只包含 `package.json` 与 `dist/`。
 - `pnpm install:plugins` 直接复制到 `installed/` 是开发快捷方式；需要来源、卸载和安装状态时，用 WorkStudio 设置 → 插件添加本地目录或 zip。
 
+## 发布
+
+GitHub Actions 会在推送 `v*` tag 时构建并创建 Release：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` 会：
+
+1. 拉取 `vendor/genoffice`；
+2. `pnpm install --frozen-lockfile`；
+3. typecheck / build / verify；
+4. 生成 `release/<id>-<version>.zip` 与 `.sha256`；
+5. 生成 `release/registry.md`；
+6. 把 zip、sha256、registry.md 挂到 GitHub Release。
+
+把 Release 里的 `registry.md` 内容追加到：
+
+```text
+<userData>/plugins/registry.md
+```
+
+或在 WorkStudio 设置 → 插件中添加对应 zip URL，重启后安装。
+
+普通分支/PR 走 `.github/workflows/ci.yml`，只构建并上传 artifact，不创建 Release。
+
 ## 运行时约束
 
 - 页面字节只通过 `ura.page.saveBytes` 写回；
