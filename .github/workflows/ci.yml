@@ -47,7 +47,7 @@ jobs:
         run: pnpm verify
 
       - name: Pack plugin zips
-        run: node scripts/pack.mjs --base-url "https://example.invalid"
+        run: pnpm pack:plugins
 
       - name: Upload plugin zips
         uses: actions/upload-artifact@v4

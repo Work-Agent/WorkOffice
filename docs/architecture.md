@@ -566,14 +566,13 @@ WorkStudio 的插件装载是新机制：
 
 - 插件是自包含目录，`package.json` 的 `workstudio` 声明
   `id / label / icon / page / apiVersion`，`exports["./ura"]` 是 ESM 注册入口；
-- 远程只接受 zip，一个 zip 只装一个插件，安装到
-  `<userData>/plugins/installed/<id>/`；URL 必须带 `sha256`；
+- 远程只接受 zip，一个 zip 只装一个插件；WorkStudio 负责下载、校验 `sha256`
+  与安装；
 - 本地目录原地加载，不复制，适合开发；
 - 安装后重启 WorkStudio 才装载；安装时不执行 npm install。
 
 发布由 `.github/workflows/release.yml` 完成：推送 `v*` tag 后，在
-GitHub Actions 中构建、打包、生成 sha256 与 `registry.md`，创建 GitHub
-Release。普通分支/PR 由 `.github/workflows/ci.yml` 构建并上传 artifact。
+GitHub Actions 中构建、打包、生成 sha256，创建 GitHub Release。普通分支/PR 由 `.github/workflows/ci.yml` 构建并上传 artifact。
 
 运行态最低验收：
 

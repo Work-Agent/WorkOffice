@@ -2,15 +2,14 @@
 // 生成 WorkStudio 可安装的插件 zip。
 //
 //   pnpm pack:plugins
-//   node scripts/pack.mjs --base-url https://github.com/org/repo/releases/download/v0.1.0
 //
 // 输出：
 //   release/<id>-<version>.zip
 //   release/<id>-<version>.zip.sha256
-//   release/registry.md
 //
 // zip 根目录直接放 package.json + dist/，一个 zip 只包含一个插件。
 // 不包含源码、node_modules、测试或构建脚本。
+// WorkStudio 的安装清单由 WorkStudio 管理，不在本仓库生成。
 
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
@@ -21,10 +20,6 @@ import { zipSync } from 'fflate'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const release = join(root, 'release')
 const pluginIds = ['docx', 'xlsx', 'pptx']
-const baseUrlArg = process.argv.indexOf('--base-url')
-const baseUrl = (baseUrlArg >= 0 ? process.argv[baseUrlArg + 1] : 'https://example.com')
-  ?.replace(/\/$/, '')
-const registryLines = ['# 可安装插件', '']
 
 async function walk(dir, base = dir) {
   const out = []
@@ -84,10 +79,4 @@ for (const id of pluginIds) {
   await writeFile(`${zipPath}.sha256`, sha256 + '\n')
   console.log(`packed ${base}.zip (${(zip.length / 1024 / 1024).toFixed(1)} MB)`)
   console.log(`  sha256 ${sha256}`)
-  const registryLine = `- [${ws.label ?? id}](${baseUrl}/${base}.zip#sha256=${sha256})`
-  registryLines.push(registryLine)
-  console.log(`  registry: ${registryLine}`)
 }
-
-await writeFile(join(release, 'registry.md'), registryLines.join('\n') + '\n')
-console.log('wrote release/registry.md')

@@ -56,9 +56,7 @@ jobs:
         run: pnpm verify
 
       - name: Pack plugin zips
-        run: |
-          node scripts/pack.mjs \
-            --base-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+        run: pnpm pack:plugins
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,4 +65,3 @@ jobs:
           files: |
             release/*.zip
             release/*.sha256
-            release/registry.md

@@ -81,8 +81,7 @@ pnpm install:builtin
 
 WorkStudio 新插件机制：
 
-- **zip**：一个 zip 只装一个插件，安装到 `<userData>/plugins/installed/<id>/`；
-  远程 zip 必须在 registry.md 的 URL 里带 `sha256`。
+- **zip**：一个 zip 只装一个插件；WorkStudio 负责下载、校验 sha256 并安装。
 - **本地目录**：在 WorkStudio 设置 → 插件中填绝对路径，原地加载，不复制；
   适合开发。
 - zip / 本地目录安装后都需要**重启 WorkStudio**才会装载。
@@ -104,16 +103,10 @@ git push origin v0.1.0
 2. `pnpm install --frozen-lockfile`；
 3. typecheck / build / verify；
 4. 生成 `release/<id>-<version>.zip` 与 `.sha256`；
-5. 生成 `release/registry.md`；
-6. 把 zip、sha256、registry.md 挂到 GitHub Release。
+5. 把 zip 与 sha256 挂到 GitHub Release。
 
-把 Release 里的 `registry.md` 内容追加到：
-
-```text
-<userData>/plugins/registry.md
-```
-
-或在 WorkStudio 设置 → 插件中添加对应 zip URL，重启后安装。
+安装入口和可安装清单归 WorkStudio 管理；本仓库只负责产出自包含的插件 zip
+与校验值。
 
 普通分支/PR 走 `.github/workflows/ci.yml`，只构建并上传 artifact，不创建 Release。
 
