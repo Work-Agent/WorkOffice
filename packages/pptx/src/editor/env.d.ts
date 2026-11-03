@@ -9,7 +9,6 @@ interface WorkStudioBus {
 }
 
 interface WorkStudioExtension {
-  invoke<T = unknown>(command: string, payload?: unknown): Promise<T>
   bus: WorkStudioBus
   ura: {
     page: {
@@ -17,6 +16,12 @@ interface WorkStudioExtension {
       saveBytes<T = unknown>(sessionId: string, bytes: Uint8Array): Promise<T>
     }
   }
+}
+
+interface WorkStudioAppBridge {
+  available(): Promise<boolean>
+  call<T = unknown>(path: string, input?: unknown): Promise<T>
+  peek<T = unknown>(path: string): Promise<T | null>
 }
 
 interface WorkStudioDesktop {
@@ -29,6 +34,7 @@ declare global {
     slidesApi: SlidesApi
     projectApi: ProjectApi
     extension: WorkStudioExtension
+    appBridge: WorkStudioAppBridge
     desktop: WorkStudioDesktop
   }
 }

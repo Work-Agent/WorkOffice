@@ -102,6 +102,17 @@ async function digest(bytes: Uint8Array): Promise<string> {
   }
 }
 
+/** 读取宿主主题：数据面 appBridge（'/theme'），缺失时回退系统偏好。 */
+export async function readHostTheme(): Promise<'light' | 'dark'> {
+  try {
+    const theme = await window.appBridge?.peek<string>('/theme')
+    if (theme === 'dark' || theme === 'light') return theme
+  } catch {
+    /* fallthrough */
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 export async function installWorkStudioSlidesHost(options: HostOptions): Promise<void> {
   let currentBytes = base64ToBytes(options.data.bytes)
   let opened = await openPptx(currentBytes)
@@ -340,10 +351,7 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
     // 生命周期 / 主题 / 语言
     getLanguage: async () => 'zh',
     onLanguageChanged: () => () => {},
-    getTheme: async () => {
-      const ui = await window.extension.invoke<{ theme?: string }>('app:ui.get')
-      return ui?.theme === 'dark' ? 'dark' : 'light'
-    },
+    getTheme: async () => readHostTheme(),
     onThemeChanged: (handler: (theme: string) => void) => {
       return window.extension.bus.on((message) => {
         if (message.type === 'theme') handler(message.theme === 'dark' ? 'dark' : 'light')

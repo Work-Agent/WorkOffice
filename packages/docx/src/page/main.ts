@@ -24,10 +24,8 @@ function applyTheme(theme: 'light' | 'dark'): void {
 
 async function currentTheme(): Promise<'light' | 'dark'> {
   try {
-    const ui = await window.extension.invoke<{ theme?: 'light' | 'dark' }>(
-      'app:ui.get',
-    )
-    if (ui?.theme === 'dark' || ui?.theme === 'light') return ui.theme
+    const theme = await window.appBridge?.peek<string>('/theme')
+    if (theme === 'dark' || theme === 'light') return theme
   } catch {
     /* 宿主未就绪时按系统主题兜底 */
   }

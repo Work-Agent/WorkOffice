@@ -25,8 +25,13 @@ export interface UraChangeEvent {
   at: number
 }
 
+export interface AppBridgeApi {
+  available(): Promise<boolean>
+  call<T = unknown>(path: string, input?: unknown): Promise<T>
+  peek<T = unknown>(path: string): Promise<T | null>
+}
+
 export interface ExtensionBridge {
-  invoke<T = unknown>(command: string, payload?: unknown): Promise<T>
   ura: {
     page: {
       get<T = unknown>(id: string): Promise<T>
@@ -49,6 +54,7 @@ export interface ExtensionBridge {
 declare global {
   interface Window {
     extension: ExtensionBridge
+    appBridge?: AppBridgeApi
     desktop?: Record<string, unknown>
     wordDesktop?: Record<string, unknown>
     slidesApi?: Record<string, unknown>

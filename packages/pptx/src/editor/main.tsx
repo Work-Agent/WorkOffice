@@ -8,7 +8,7 @@ import { htmlDir, htmlLang, type Lang } from '@genoffice/i18n'
 import { installScreenTips } from '@genoffice/ui'
 import { App } from './App'
 import { LocaleProvider, setModuleLang } from './i18n/locale'
-import { installWorkStudioSlidesHost } from './workstudio-host'
+import { installWorkStudioSlidesHost, readHostTheme } from './workstudio-host'
 
 import '@genoffice/ui/tokens.css'
 import '@genoffice/ui/screentip.css'
@@ -47,8 +47,7 @@ async function bootstrap(): Promise<void> {
       id: string
       data: any
     }>(sessionId)
-    const ui = await window.extension.invoke<{ theme?: string }>('app:ui.get')
-    theme = ui?.theme === 'dark' ? 'dark' : 'light'
+    theme = await readHostTheme()
     applyTheme(theme)
   } catch (error) {
     fail(

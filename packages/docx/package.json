@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-docx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DOCX 阅读与编辑：基于 GenOffice Docs 渲染器，字节保真保存",
   "author": "work-studio",
   "license": "Apache-2.0",

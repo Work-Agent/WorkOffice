@@ -15,7 +15,6 @@ interface WorkStudioBus {
 }
 
 interface WorkStudioExtension {
-  invoke<T = unknown>(command: string, payload?: unknown): Promise<T>
   bus: WorkStudioBus
   ura: {
     page: {
@@ -25,11 +24,18 @@ interface WorkStudioExtension {
   }
 }
 
+interface WorkStudioAppBridge {
+  available(): Promise<boolean>
+  call<T = unknown>(path: string, input?: unknown): Promise<T>
+  peek<T = unknown>(path: string): Promise<T | null>
+}
+
 declare global {
   interface Window {
     readonly desktopApi: DesktopApi
     readonly projectApi: ProjectApi
     readonly extension: WorkStudioExtension
+    readonly appBridge: WorkStudioAppBridge
   }
 }
 

@@ -21,7 +21,7 @@ import {
   untilCellFontsLoaded,
 } from './cell-font-fallback'
 import { LocaleProvider, setModuleLang } from './i18n/locale'
-import { installWorkStudioHost, type XlsxPageData } from './workstudio-host'
+import { installWorkStudioHost, readHostTheme, type XlsxPageData } from './workstudio-host'
 import './styles.css'
 
 const root = document.getElementById('root')
@@ -65,8 +65,7 @@ async function bootstrap(): Promise<void> {
       data: XlsxPageData
     }>(sessionId)
     data = info.data
-    const ui = await window.extension.invoke<{ theme?: string }>('app:ui.get')
-    theme = ui?.theme === 'dark' ? 'dark' : 'light'
+    theme = await readHostTheme()
     applyTheme(theme)
   } catch (error) {
     fail(
