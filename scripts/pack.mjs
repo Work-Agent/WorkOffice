@@ -19,7 +19,7 @@ import { zipSync } from 'fflate'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const release = join(root, 'release')
-const pluginIds = ['docx', 'xlsx', 'pptx']
+const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro']
 
 async function walk(dir, base = dir) {
   const out = []
@@ -44,7 +44,16 @@ function minimalManifest(pkg) {
   }
 }
 
-await rm(release, { recursive: true, force: true })
+const tagIndex = process.argv.indexOf('--tag')
+const tag = tagIndex >= 0 ? process.argv[tagIndex + 1] : undefined
+const onlyIndex = process.argv.indexOf('--only')
+const onlyArg = onlyIndex >= 0 ? process.argv[onlyIndex + 1] : undefined
+if (onlyArg) {
+  const wanted = onlyArg.split(',').map((id) => id.trim()).filter(Boolean)
+  pluginIds.splice(0, pluginIds.length, ...wanted)
+}
+
+// 不清空 release：一次只打某个插件时不该删掉别的产物（重名会覆盖）。
 await mkdir(release, { recursive: true })
 
 for (const id of pluginIds) {
@@ -53,7 +62,10 @@ for (const id of pluginIds) {
   const ws = pkg.workstudio ?? {}
   if (ws.id !== id) throw new Error(`${id}: workstudio.id 必须为 "${id}"`)
   if (!pkg.version) throw new Error(`${id}: 缺少 version`)
-  if (ws.apiVersion !== 1) throw new Error(`${id}: workstudio.apiVersion 必须为 1`)
+  if (ws.apiVersion !== 1 && ws.apiVersion !== 2)
+    throw new Error(`${id}: workstudio.apiVersion 必须为 1 或 2`)
+  if (ws.apiVersion === 2 && ws.write === 'plan' && !ws.engine?.exec)
+    throw new Error(`${id}: write: 'plan' 必须声明 engine.exec`)
   const ura = pkg.exports?.['./ura']
   if (!ura) throw new Error(`${id}: exports["./ura"] 缺失`)
   for (const file of [ura, ws.page]) {
@@ -70,9 +82,18 @@ for (const id of pluginIds) {
   for (const file of distFiles) {
     entries[`dist/${file}`] = new Uint8Array(await readFile(join(pkgRoot, 'dist', file)))
   }
+  // 技能目录随插件分发（v2 清单的 skills[].dir 指向它）。
+  for (const skill of ws.skills ?? []) {
+    if (!skill?.dir) continue
+    for (const file of await walk(join(pkgRoot, skill.dir))) {
+      entries[`${skill.dir}/${file}`] = new Uint8Array(
+        await readFile(join(pkgRoot, skill.dir, file)),
+      )
+    }
+  }
 
   const zip = zipSync(entries, { level: 6 })
-  const base = `${id}-${pkg.version}`
+  const base = `${id}-${pkg.version}${tag ? `-${tag}` : ''}`
   const zipPath = join(release, `${base}.zip`)
   await writeFile(zipPath, zip)
   const sha256 = createHash('sha256').update(zip).digest('hex')
