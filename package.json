@@ -8,6 +8,7 @@
   "scripts": {
     "build": "pnpm --filter './packages/*' build",
     "build:docx": "pnpm --filter @workstudio/plugin-docx build",
+    "build:docx-pro": "pnpm --filter @workstudio/plugin-docx-pro build",
     "typecheck": "pnpm --filter './packages/*' typecheck",
     "clean": "pnpm --filter './packages/*' clean",
     "setup": "node scripts/setup-genoffice.mjs && pnpm install",

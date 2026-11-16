@@ -1,0 +1,73 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@genoffice/agent-core": [
+        "../../vendor/genoffice/packages/agent-core/src/index.ts"
+      ],
+      "@genoffice/agent-core/redact-core": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-core.ts"
+      ],
+      "@genoffice/agent-core/redact-range": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-range.ts"
+      ],
+      "@genoffice/ai-provider": [
+        "../../vendor/genoffice/packages/ai-provider/src/index.ts"
+      ],
+      "@genoffice/ai-provider/browser": [
+        "../../vendor/genoffice/packages/ai-provider/src/browser.ts"
+      ],
+      "@genoffice/docx-engine": [
+        "../../vendor/genoffice/packages/docx-engine/src/index.ts"
+      ],
+      "@genoffice/electron-utils/headless-export": [
+        "../../vendor/genoffice/packages/electron-utils/src/headless-export.ts"
+      ],
+      "@genoffice/electron-utils/safe-external-url": [
+        "../../vendor/genoffice/packages/electron-utils/src/safe-external-url.ts"
+      ],
+      "@genoffice/font-metrics": [
+        "../../vendor/genoffice/packages/font-metrics/src/index.ts"
+      ],
+      "@genoffice/i18n": [
+        "../../vendor/genoffice/packages/i18n/src/index.ts"
+      ],
+      "@genoffice/pptx-render/preset-geometry": [
+        "../../vendor/genoffice/packages/pptx-render/src/preset-geometry.ts"
+      ],
+      "@genoffice/project-store": [
+        "../../vendor/genoffice/packages/project-store/src/index.ts"
+      ],
+      "@genoffice/ui": [
+        "../../vendor/genoffice/packages/ui/src/index.ts"
+      ],
+      "@genoffice/zip-gate": [
+        "../../vendor/genoffice/packages/zip-gate/src/index.ts"
+      ],
+      "@genoffice/pptx-engine": [
+        "../../vendor/genoffice/packages/pptx-engine/src/index.ts"
+      ],
+      "@genoffice/pptx-engine/chart-workbook": [
+        "../../vendor/genoffice/packages/pptx-engine/src/chart-workbook.ts"
+      ],
+      "@genoffice/pptx-engine/custgeom": [
+        "../../vendor/genoffice/packages/pptx-engine/src/custgeom.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "vite.config.ts",
+    "src/page-v2/genoffice/editor/env.d.ts"
+  ]
+}
