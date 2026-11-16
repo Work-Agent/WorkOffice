@@ -1,8 +1,8 @@
 # WorkStudio Office 插件
 
 DOCX / XLSX / PPTX 三种 WorkStudio 资源页。页面层复用 GenOffice 的
-renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话与
-`saveBytes`。
+renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话与写通道
+（整份 `saveBytes` 或计划型 `commit`）。
 
 整体架构、GenOffice 源码分层、Office 功能解构与封装方式：
 
@@ -10,13 +10,18 @@ renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话
 
 ## 插件
 
-| 包 | 页面 | 说明 |
-| --- | --- | --- |
-| `@workstudio/plugin-docx` | GenOffice Docs 编辑器 fork | 文本、分页、Ribbon、审阅、打印/导出 |
-| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer | Ribbon、Univer 网格、公式栏、格式、查找、筛选、透视、图表 |
-| `@workstudio/plugin-pptx` | GenOffice Slides renderer | Konva 画布、原位文本、变换、幻灯片/节、表格/图表、媒体、动画、母版、放映、PDF |
+| 包 | 页面 | 写形态 | 说明 |
+| --- | --- | --- | --- |
+| `@workstudio/plugin-docx` | GenOffice Docs 编辑器 fork | `bytes` | 文本、分页、Ribbon、审阅、打印/导出 |
+| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer | `bytes` | Ribbon、Univer 网格、公式栏、格式、查找、筛选、透视、图表 |
+| `@workstudio/plugin-pptx` | GenOffice Slides renderer | `bytes` | Konva 画布、原位文本、变换、幻灯片/节、表格/图表、媒体、动画、母版、放映、PDF |
+| `@workstudio/plugin-docx-pro` | 同上编辑器 + 块命令引擎 | `plan` | **合体版**：完整编辑器 + 3 个工具 / 41 条命令；有页面走编辑器事务，无页面走块级 XML 切片 |
+| `@workstudio/plugin-office-docx` | 块列表 | `plan` | 纯后台/批处理的最小实现（无分页渲染） |
 
-三个插件都注册：
+> `docx` / `docx-pro` / `office-docx` 声明同一个 MIME，**同一工作区只能启用一个**；
+> 后注册者会在注册表里 override 前者的 codec / presenter。
+
+插件都注册：
 
 ```ts
 registerCodec(codec)
@@ -24,8 +29,14 @@ registerPresenter(presenter)
 registerSidecar(sidecar)
 ```
 
-页面只拿页面会话 id 和 presenter 投递的字节；保存统一走
-`ura.page.saveBytes`，页面不碰路径，也没有 Node 能力。
+页面只拿页面会话 id 和 presenter 投递的元数据；字节走 `bytes` 分块通道，
+写回只有两条合法路径：
+
+- `write: 'bytes'` → `ura.page.saveBytes(id, bytes)`（整份提交）
+- `write: 'plan'` → `ura.page.commit(id, { payload: { type: 'plan', plan } })`
+  （宿主锁内 `exec` 产字节）
+
+页面不碰路径，也没有 Node 能力。
 
 ## 仓库结构
 
@@ -33,6 +44,10 @@ registerSidecar(sidecar)
 packages/
 ├─ docx/
 │  └─ src/{page,editor,shared,ura.ts}
+├─ docx-pro/                  # 合体：完整编辑器 + 计划型写
+│  ├─ src/{page,engine,shared,tools,ura.ts}
+│  ├─ skills/docx/SKILL.md
+│  └─ tests/                  # 引擎 / 声明 / 往返
 ├─ xlsx/
 │  └─ src/{editor,shared,ura.ts,ura-types.ts}
 ├─ pptx/
@@ -62,6 +77,7 @@ pnpm verify         # 校验 codec / presenter / sidecar 契约
 
 ```bash
 pnpm build:docx
+pnpm build:docx-pro # 完整编辑器 + 执行点 + 页面
 pnpm build:codec    # 只构建 ura.js
 ```
 
@@ -112,7 +128,7 @@ git push origin v0.1.0
 
 ## 运行时约束
 
-- 页面字节只通过 `ura.page.saveBytes` 写回；
+- 页面字节只通过 `ura.page.saveBytes`（整份）或 `ura.page.commit`（计划）写回；
 - 模型修改必须走 GenOffice 的操作层（PPTX `runTxn`、XLSX gateway/Univer mutation、DOCX transaction）；
 - XLSX 保存使用完整 `planCellEditsToXlsx` 参数，不能调用会丢字段的旧包装；
 - PPTX 保存后重新 `openPptx(bytes)`，刷新元素 id 与字节锚点；
