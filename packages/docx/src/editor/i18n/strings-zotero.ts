@@ -1,7 +1,7 @@
 import { defineStrings } from '@genoffice/i18n'
 
 /** Strings for the Zotero integration in the References tab. */
-export const zoteroStrings = defineStrings({
+const dicts = {
   zh: {
     zoteroCitation: 'Zotero 引文',
     zoteroCitationTip: '使用 Zotero 添加引文；光标在现有引文中时可编辑',
@@ -372,4 +372,6 @@ export const zoteroStrings = defineStrings({
       'Tài liệu này có chứa trích dẫn Zotero trong chú thích cuối trang hoặc chú thích cuối tài liệu mà GenOffice hiện chưa thể cập nhật. Các lệnh Zotero đã bị tắt tại đây để giữ nguyên danh mục tài liệu tham khảo.',
     zoteroGroup: 'Zotero',
   },
-})
+}
+// 上游新增 tr / hu：这两个文件用内联字典，直接复用 en
+export const zoteroStrings = defineStrings({ ...dicts, tr: dicts.en, hu: dicts.en })

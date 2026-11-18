@@ -1,7 +1,7 @@
 import { defineStrings } from '@genoffice/i18n'
 
 /** Strings for editor/, pagination, and line-metrics */
-export const editorStrings = defineStrings({
+const dicts = {
   zh: {
     editorFootnote: '脚注',
     editorEndnote: '尾注',
@@ -1199,4 +1199,6 @@ export const editorStrings = defineStrings({
     editorCoverFacet: 'Vát cạnh',
     editorCoverAnnual: 'Báo cáo thường niên',
   },
-})
+}
+// 上游新增 tr / hu：这两个文件用内联字典，直接复用 en
+export const editorStrings = defineStrings({ ...dicts, tr: dicts.en, hu: dicts.en })
