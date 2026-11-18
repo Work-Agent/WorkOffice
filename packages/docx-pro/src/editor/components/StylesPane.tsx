@@ -203,7 +203,11 @@ export function StylesPane({
               disabled={!canEdit || (info.type !== 'character' && !!fs.sub)}
               data-style-id={info.styleId}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => applyGalleryStyle(editor, fs.sub, info, styles, fs.charStyleId)}
+              onClick={() => {
+                // a baseline card the document does not define is written to styles.xml first
+                const err = applyGalleryStyle(editor, fs.sub, info, map, fs.charStyleId, onUpsert)
+                if (err) onNotice(err)
+              }}
               onContextMenu={(e) => openMenu(e, info)}
             >
               <span className="style-card-preview" style={stylePreviewCss(info, docDefaults)}>

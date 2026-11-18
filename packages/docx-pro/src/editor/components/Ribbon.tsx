@@ -34,6 +34,7 @@ import type {
   SectionSettings,
   SourceInfo,
   StyleInfo,
+  StyleUpsert,
   TableAutoFitMode,
   TableLook,
   TextboxDisplay,
@@ -259,6 +260,12 @@ interface RibbonProps {
   recentListPresets?: Record<ListPresetKind, CustomNumberingLevel[][]>
   /** document character styles, from ParsedDoc.styles (type === 'character') */
   styles?: Map<string, StyleInfo>
+  /**
+   * Queue a style definition for the save. A gallery card for a baseline style
+   * the document does not define (body text, headings 1-4) writes its
+   * definition through this before applying it.
+   */
+  onStyleDef?: (up: StyleUpsert) => string | null
   /** document-wide text defaults from styles.xml */
   docDefaults?: DocDefaults
   /** Open the paragraph dialog (line-spacing rule / exact value entry lives there) */
@@ -719,6 +726,7 @@ function RibbonInner({
   onReplace,
   styles,
   docDefaults,
+  onStyleDef,
   onSave,
   onConvert,
   section,
@@ -1479,7 +1487,7 @@ function RibbonInner({
 
   const applyStyle = (info: StyleInfo) => {
     if (!canEdit) return
-    applyGalleryStyle(editor, sub, info, styles, activeCharStyleId)
+    applyGalleryStyle(editor, sub, info, styles, activeCharStyleId, onStyleDef)
   }
 
   /** Style cards, shared by the inline gallery and its overflow menu */
