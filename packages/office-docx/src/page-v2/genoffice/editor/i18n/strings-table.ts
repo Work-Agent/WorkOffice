@@ -79,4 +79,7 @@ export const tableStrings = defineStrings({
   hi: en,
   'zh-TW': en,
   vi: en,
+  // 上游新增 tr / hu：fork 未翻译，先映射到 en（宿主只切 zh）
+  tr: en,
+  hu: en,
 })

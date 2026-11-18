@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-office-docx",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Word 文档（.docx）：计划型写 · 块级字节保真 · 页面自取内容",
   "author": "work-studio",
   "license": "Apache-2.0",

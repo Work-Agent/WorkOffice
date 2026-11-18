@@ -22,6 +22,24 @@ export const strings = {
     ...aiStrings.en,
     ...zoteroStrings.en,
   },
+  tr: {
+    ...appStrings.tr,
+    ...ribbonStrings.tr,
+    ...tableStrings.tr,
+    ...editorStrings.tr,
+    ...aiStrings.tr,
+    ...zoteroStrings.tr,
+
+  },
+  hu: {
+    ...appStrings.hu,
+    ...ribbonStrings.hu,
+    ...tableStrings.hu,
+    ...editorStrings.hu,
+    ...aiStrings.hu,
+    ...zoteroStrings.hu,
+
+  },
   ja: {
     ...appStrings.ja,
     ...ribbonStrings.ja,
