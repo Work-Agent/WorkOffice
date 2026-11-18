@@ -313,6 +313,10 @@ const LAYOUT_ERROR_KEYS = {
   tooManyRowLines: 'appPivotTooManyRowLines',
   needsValues: 'appPivotNeedsValues',
   pageItemMissing: 'appPivotPageItemMissing',
+  // 上游新增的 3 个 pivot 错误码（f6c2358c）：落到最接近的既有文案上
+  baseFieldMissing: 'appPivotFieldNotHeader',
+  baseFieldNotAxis: 'appPivotFieldNotHeader',
+  baseItemMissing: 'appPivotPageItemMissing',
 } satisfies Record<PivotLayoutErrorCode, Parameters<typeof t>[0]>
 
 /// Rows the report-filter block occupies above the table body: one per page

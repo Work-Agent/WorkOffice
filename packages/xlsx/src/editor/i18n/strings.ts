@@ -4,6 +4,8 @@ import { dialogStrings } from './strings-dialogs'
 export const strings = {
   zh: { ...appStrings.zh, ...dialogStrings.zh },
   en: { ...appStrings.en, ...dialogStrings.en },
+  tr: { ...appStrings.tr, ...dialogStrings.tr },
+  hu: { ...appStrings.hu, ...dialogStrings.hu },
   ja: { ...appStrings.ja, ...dialogStrings.ja },
   ko: { ...appStrings.ko, ...dialogStrings.ko },
   fr: { ...appStrings.fr, ...dialogStrings.fr },
