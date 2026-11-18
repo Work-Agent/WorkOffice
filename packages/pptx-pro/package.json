@@ -1,0 +1,68 @@
+{
+  "name": "@workstudio/plugin-pptx-pro",
+  "version": "0.1.0",
+  "description": "PowerPoint 演示文稿（.pptx）：常驻模型 + 计划型写。页面交 TxnRequest，执行点流式产字节，两阶段提交模型。",
+  "author": "work-studio",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ura": "./dist/ura.js"
+  },
+  "workstudio": {
+    "id": "pptx-pro",
+    "label": "PowerPoint 演示文稿",
+    "icon": "presentation",
+    "page": "dist/page/index.html",
+    "apiVersion": 2,
+    "write": "plan",
+    "content": "pulled",
+    "model": "resident",
+    "engine": {
+      "tools": "./dist/engine/tools.mjs",
+      "plan": "./dist/engine/plan.mjs",
+      "exec": "./dist/engine/exec.mjs",
+      "read": "./dist/engine/read.mjs",
+      "runtime": "./dist/engine/runtime.mjs"
+    },
+    "skills": [
+      {
+        "name": "pptx",
+        "dir": "skills/pptx"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/gen-op-catalog.mjs && node scripts/build.mjs",
+    "build:engine": "node scripts/build.mjs --engine-only",
+    "build:page": "node scripts/build.mjs --page-only",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/engine.test.mjs tests/ura.test.mjs",
+    "verify": "node scripts/verify.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:seed": "node scripts/gen-seed.mjs",
+    "gen:catalog": "node scripts/gen-op-catalog.mjs"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "acorn": "^8.19.0",
+    "buffer": "^6.0.3",
+    "fflate": "^0.8.2",
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "bidi-js": "^1.0.3",
+    "esbuild": "^0.27.3",
+    "fast-xml-parser": "^5.3.4",
+    "opentype.js": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

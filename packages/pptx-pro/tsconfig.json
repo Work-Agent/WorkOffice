@@ -1,0 +1,106 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "allowArbitraryExtensions": true,
+    "paths": {
+      "@genoffice/agent-core": [
+        "../../vendor/genoffice/packages/agent-core/src/index.ts"
+      ],
+      "@genoffice/ai-provider": [
+        "../../vendor/genoffice/packages/ai-provider/src/index.ts"
+      ],
+      "@genoffice/ai-provider/browser": [
+        "../../vendor/genoffice/packages/ai-provider/src/browser.ts"
+      ],
+      "@genoffice/docx-engine/metafile": [
+        "../../vendor/genoffice/packages/docx-engine/src/metafile.ts"
+      ],
+      "@genoffice/electron-utils/font-store": [
+        "../../vendor/genoffice/packages/electron-utils/src/font-store.ts"
+      ],
+      "@genoffice/electron-utils/headless-export": [
+        "../../vendor/genoffice/packages/electron-utils/src/headless-export.ts"
+      ],
+      "@genoffice/electron-utils/safe-external-url": [
+        "../../vendor/genoffice/packages/electron-utils/src/safe-external-url.ts"
+      ],
+      "@genoffice/i18n": [
+        "../../vendor/genoffice/packages/i18n/src/index.ts"
+      ],
+      "@genoffice/pptx-engine": [
+        "../../vendor/genoffice/packages/pptx-engine/src/index.ts"
+      ],
+      "@genoffice/pptx-engine/model3d": [
+        "../../vendor/genoffice/packages/pptx-engine/src/model3d.ts"
+      ],
+      "@genoffice/pptx-engine/named-action": [
+        "../../vendor/genoffice/packages/pptx-engine/src/named-action.ts"
+      ],
+      "@genoffice/pptx-engine/smartart-layout": [
+        "../../vendor/genoffice/packages/pptx-engine/src/smartart-layout.ts"
+      ],
+      "@genoffice/pptx-ops": [
+        "../../vendor/genoffice/packages/pptx-ops/src/index.ts"
+      ],
+      "@genoffice/pptx-ops/font-size": [
+        "../../vendor/genoffice/packages/pptx-ops/src/font-size.ts"
+      ],
+      "@genoffice/pptx-render": [
+        "../../vendor/genoffice/packages/pptx-render/src/index.ts"
+      ],
+      "@genoffice/project-store": [
+        "../../vendor/genoffice/packages/project-store/src/index.ts"
+      ],
+      "@genoffice/ui": [
+        "../../vendor/genoffice/packages/ui/src/index.ts"
+      ],
+      "@genoffice/ui/color-picker.css": [
+        "../../vendor/genoffice/packages/ui/src/color-picker.css"
+      ],
+      "@genoffice/ui/dropdown.css": [
+        "../../vendor/genoffice/packages/ui/src/dropdown.css"
+      ],
+      "@genoffice/ui/markdown.css": [
+        "../../vendor/genoffice/packages/ui/src/markdown.css"
+      ],
+      "@genoffice/ui/ribbon-collapse.css": [
+        "../../vendor/genoffice/packages/ui/src/ribbon-collapse.css"
+      ],
+      "@genoffice/ui/screentip.css": [
+        "../../vendor/genoffice/packages/ui/src/screentip.css"
+      ],
+      "@genoffice/ui/tokens.css": [
+        "../../vendor/genoffice/packages/ui/src/tokens.css"
+      ],
+      "@genoffice/zip-gate": [
+        "../../vendor/genoffice/packages/zip-gate/src/index.ts"
+      ],
+      "@genoffice/agent-core/redact-range": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-range.ts"
+      ],
+      "@genoffice/agent-core/redact-core": [
+        "../../vendor/genoffice/packages/agent-core/src/redact-core.ts"
+      ],
+      "@genoffice/docx-engine/math": [
+        "../../vendor/genoffice/packages/docx-engine/src/math.ts"
+      ],
+      "@genoffice/pptx-engine/table-grid": [
+        "../../vendor/genoffice/packages/pptx-engine/src/table-grid.ts"
+      ],
+      "@genoffice/pptx-engine/identity": [
+        "../../vendor/genoffice/packages/pptx-engine/src/identity.ts"
+      ],
+      "@genoffice/pptx-engine/background-promote": [
+        "../../vendor/genoffice/packages/pptx-engine/src/background-promote.ts"
+      ],
+      "@genoffice/pptx-render/preset-geometry": [
+        "../../vendor/genoffice/packages/pptx-render/src/preset-geometry.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "vite.config.ts"
+  ]
+}
