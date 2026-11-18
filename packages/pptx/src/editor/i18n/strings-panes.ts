@@ -44,4 +44,7 @@ export const paneStrings = defineStrings({
   hi,
   'zh-TW': zhTW,
   vi,
+  // 上游新增 tr / hu：fork 未翻译，先映射到 en（宿主只切 zh，不可达）
+  tr: en,
+  hu: en,
 })

@@ -5,6 +5,8 @@ import { ribbonStrings } from './strings-ribbon'
 export const strings = {
   zh: { ...appStrings.zh, ...ribbonStrings.zh, ...paneStrings.zh },
   en: { ...appStrings.en, ...ribbonStrings.en, ...paneStrings.en },
+  tr: { ...appStrings.tr, ...ribbonStrings.tr, ...paneStrings.tr },
+  hu: { ...appStrings.hu, ...ribbonStrings.hu, ...paneStrings.hu },
   ja: { ...appStrings.ja, ...ribbonStrings.ja, ...paneStrings.ja },
   ko: { ...appStrings.ko, ...ribbonStrings.ko, ...paneStrings.ko },
   fr: { ...appStrings.fr, ...ribbonStrings.fr, ...paneStrings.fr },

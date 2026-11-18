@@ -41,6 +41,8 @@ export const DATE_LOCALES: Record<Lang, string> = {
   hi: 'hi-IN',
   'zh-TW': 'zh-TW',
   vi: 'vi-VN',
+  tr: 'tr-TR',
+  hu: 'hu-HU',
 }
 
 const LocaleContext = createContext<Lang>('zh')
