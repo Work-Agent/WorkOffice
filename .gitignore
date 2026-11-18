@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # plugin distribution zips
 release/
+
+# wasm 构建中间产物（Rust 副本 + cargo target）
+packages/xlsx-pro/build/
