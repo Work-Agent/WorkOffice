@@ -19,7 +19,7 @@ import { zipSync } from 'fflate'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const release = join(root, 'release')
-const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro']
+const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro']
 
 async function walk(dir, base = dir) {
   const out = []
@@ -80,7 +80,23 @@ for (const id of pluginIds) {
   )
   const distFiles = await walk(join(pkgRoot, 'dist'))
   for (const file of distFiles) {
+    // dist/shared/** 是测试与诊断入口（verify.mjs / node --test 用），
+    // 运行时已被 bundle 进 engine / page / ura，不进安装包。
+    if (file.startsWith('shared/')) continue
     entries[`dist/${file}`] = new Uint8Array(await readFile(join(pkgRoot, 'dist', file)))
+  }
+  // 执行点产物自证：引擎清单里的 sha256 必须与随包的 wasm 一致，
+  // 否则可能把"上次构建的 wasm + 这次构建的清单"混进安装包。
+  const engineJson = join(pkgRoot, 'dist/engine/xlsx-engine.json')
+  const engineInfo = await stat(engineJson).catch(() => null)
+  if (engineInfo?.isFile()) {
+    const manifest = JSON.parse(await readFile(engineJson, 'utf8'))
+    const wasm = new Uint8Array(await readFile(join(pkgRoot, 'dist/engine/xlsx-engine.wasm')))
+    const actual = createHash('sha256').update(wasm).digest('hex')
+    if (manifest.sha256 !== actual)
+      throw new Error(
+        `${id}: wasm 与清单 sha256 不一致（清单 ${String(manifest.sha256).slice(0, 12)}… / 实际 ${actual.slice(0, 12)}…），请重新构建`,
+      )
   }
   // 技能目录随插件分发（v2 清单的 skills[].dir 指向它）。
   for (const skill of ws.skills ?? []) {

@@ -26,9 +26,21 @@ const PLUGINS = [
     extensions: ['xlsx', 'xlsm', 'xltx'],
   },
   {
+    id: 'xlsx-pro',
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    surface: 'xlsx-pro',
+    extensions: ['xlsx', 'xlsm', 'xltx'],
+  },
+  {
     id: 'pptx',
     mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     surface: 'pptx-viewer',
+    extensions: ['pptx', 'pptm', 'potx'],
+  },
+  {
+    id: 'pptx-pro',
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    surface: 'pptx-pro',
     extensions: ['pptx', 'pptm', 'potx'],
   },
 ]
