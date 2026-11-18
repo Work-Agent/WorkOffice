@@ -14,11 +14,13 @@ renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话
 | --- | --- | --- | --- |
 | `@workstudio/plugin-docx` | GenOffice Docs 编辑器 fork | `bytes` | 文本、分页、Ribbon、审阅、打印/导出 |
 | `@workstudio/plugin-xlsx` | GenOffice Sheets renderer | `bytes` | Ribbon、Univer 网格、公式栏、格式、查找、筛选、透视、图表 |
+| `@workstudio/plugin-xlsx-pro` | 同上 renderer + gateway 计划引擎 | `plan` | **合体版**：完整 Sheets 编辑器 + 4 个工具 / 56 条命令；有页面交整份字节，无页面交 gateway 保存请求 |
 | `@workstudio/plugin-pptx` | GenOffice Slides renderer | `bytes` | Konva 画布、原位文本、变换、幻灯片/节、表格/图表、媒体、动画、母版、放映、PDF |
 | `@workstudio/plugin-docx-pro` | 同上编辑器 + 块命令引擎 | `plan` | **合体版**：完整编辑器 + 3 个工具 / 41 条命令；有页面走编辑器事务，无页面走块级 XML 切片 |
+| `@workstudio/plugin-pptx-pro` | 同上 Slides 编辑器 + 常驻 `OpenedPptx` | `plan` | **合体版**：完整 Slides 编辑器 + 4 个工具 / 63 条命令；页面交 `TxnRequest`，无页面走 `runTxn + savePptxToFile` |
 | `@workstudio/plugin-office-docx` | 块列表 | `plan` | 纯后台/批处理的最小实现（无分页渲染） |
 
-> `docx` / `docx-pro` / `office-docx` 声明同一个 MIME，**同一工作区只能启用一个**；
+> `docx` / `docx-pro` / `office-docx` 声明同一个 MIME，`xlsx` / `xlsx-pro` 声明同一个 MIME，`pptx` / `pptx-pro` 声明同一个 MIME，**同一工作区只能启用一个**；
 > 后注册者会在注册表里 override 前者的 codec / presenter。
 
 插件都注册：
@@ -50,8 +52,16 @@ packages/
 │  └─ tests/                  # 引擎 / 声明 / 往返
 ├─ xlsx/
 │  └─ src/{editor,shared,ura.ts,ura-types.ts}
+├─ xlsx-pro/                  # 合体：完整 Sheets 编辑器 + 计划型写
+│  ├─ src/{page,engine,shared,tools,ura.ts}
+│  ├─ skills/xlsx/SKILL.md
+│  └─ tests/
 ├─ pptx/
 │  └─ src/{editor,shared,ura.ts}
+├─ pptx-pro/                 # 合体：完整 Slides 编辑器 + 常驻模型计划型写
+│  ├─ src/{page,engine,shared,editor,tools,ura.ts}
+│  ├─ skills/pptx/SKILL.md
+│  └─ tests/
 ├─ vendor/genoffice/          # sparse checkout 的 GenOffice 源码
 ├─ scripts/
 │  ├─ setup-genoffice.mjs
@@ -62,7 +72,8 @@ packages/
 
 XLSX / PPTX 的 `src/editor` 是从 GenOffice 对应 renderer fork 的页面层；
 `workstudio-host.ts` 是唯一的宿主适配层；`workstudio-save.ts`（XLSX）
-负责保存请求到 `xlsx-gateway` 的映射。
+负责保存请求到 `xlsx-gateway` 的映射。`xlsx-pro` 复用同一份 renderer fork，
+并把页面保存改成计划型 `commit`。
 
 ## 开发
 
@@ -78,6 +89,8 @@ pnpm verify         # 校验 codec / presenter / sidecar 契约
 ```bash
 pnpm build:docx
 pnpm build:docx-pro # 完整编辑器 + 执行点 + 页面
+pnpm build:xlsx-pro # Sheets 编辑器 + gateway 执行点 + 页面
+pnpm build:pptx-pro # Slides 编辑器 + 常驻 OpenedPptx + 执行点
 pnpm build:codec    # 只构建 ura.js
 ```
 

@@ -16,7 +16,9 @@
     "build:codec": "pnpm --filter './packages/*' build:ura",
     "verify": "node scripts/verify-contract.mjs",
     "install:builtin": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
-    "pack:plugins": "node scripts/pack.mjs"
+    "pack:plugins": "node scripts/pack.mjs",
+    "build:xlsx-pro": "pnpm --filter @workstudio/plugin-xlsx-pro build",
+    "build:pptx-pro": "pnpm --filter @workstudio/plugin-pptx-pro build"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
