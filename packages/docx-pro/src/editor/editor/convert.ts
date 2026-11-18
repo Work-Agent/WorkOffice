@@ -64,6 +64,7 @@ import {
 } from '../line-metrics'
 import { firstStrongDir } from './direction'
 import { splitCellBoxGroup } from './protected-render'
+import { newBlockId } from './block-id'
 import { inlineMathML } from './equation'
 import { isStraightLineKind } from './shape-svg'
 import { borderDrawnPx, borderTotalPt, collapsedEdgePx } from './border-metrics'
@@ -134,24 +135,29 @@ export function blocksToPmDoc(
   blocks: Block[],
   sections?: SectionInfo[],
   options: PmDocOptions = {},
+  anchors?: Map<string, number | null>,
 ): PmNode {
   const content: PmNode[] = []
   for (const block of blocks) {
     if (block.hidden) continue
-    content.push(
-      blockToPmNode(
-        block,
-        sectionRowCapTwips(sections, block.docxIndex),
-        sectionWidthBudget(sections, block.docxIndex),
-        options,
-      ),
+    const node = blockToPmNode(
+      block,
+      sectionRowCapTwips(sections, block.docxIndex),
+      sectionWidthBudget(sections, block.docxIndex),
+      options,
     )
+    const blockId = newBlockId()
+    node.attrs = { ...node.attrs, blockId }
+    anchors?.set(blockId, block.docxIndex)
+    content.push(node)
   }
   if (content.length === 0) {
+    const blockId = newBlockId()
     content.push({
       type: 'docParagraph',
-      attrs: { docxIndex: null, styleId: null, aiChanged: false },
+      attrs: { docxIndex: null, blockId, styleId: null, aiChanged: false },
     })
+    anchors?.set(blockId, null)
   }
   return { type: 'doc', content }
 }
@@ -2003,11 +2009,25 @@ export function normalizeZoteroFieldParts(doc: PmNode): PmNode {
   return rebuild(doc)
 }
 
-export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): SavePlan {
+export function pmDocToSavePlan(
+  inputDoc: PmNode,
+  originalBlocks: Block[],
+  anchors: ReadonlyMap<string, number | null> = new Map(),
+): SavePlan {
   newPictures.clear()
   newPictureSeq = 0
   newPictureTokenOf = new WeakMap()
   const doc = normalizeZoteroFieldParts(inputDoc)
+
+  /** Save identity: blockId -> current file coordinate. */
+  const anchorOf = (node: PmNode): number | null => {
+    const id = typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : null
+    if (id) return anchors.get(id) ?? null
+    // Legacy path for nodes created before blockId existed.
+    const legacy = node.attrs?.docxIndex
+    return typeof legacy === 'number' ? legacy : null
+  }
+
   const originalByIndex = new Map<number, Block>()
   for (const block of originalBlocks) {
     if (!block.hidden && block.docxIndex !== null) originalByIndex.set(block.docxIndex, block)
@@ -2022,7 +2042,7 @@ export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): Save
   const hasZOrderEdit = (nodes: PmNode[] | undefined): boolean => {
     for (const n of nodes ?? []) {
       if (n.type === 'docProtected' && n.attrs?.blockType === 'image') {
-        const idx = n.attrs.docxIndex as number | null | undefined
+        const idx = anchorOf(n)
         const orig = idx !== null && idx !== undefined ? originalByIndex.get(idx) : undefined
         if (orig) {
           const wrap = (n.attrs.imageWrap as ImageWrap | null) ?? null
@@ -2075,7 +2095,7 @@ export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): Save
   const mapAnchor = (idx: number) => saveBlockIndexByDocx.set(idx, saveBlocks.length)
 
   const recordSdtEmit = (node: PmNode, sb: SaveBlock, at: number) => {
-    const idx = node.attrs?.docxIndex as number | null | undefined
+    const idx = anchorOf(node)
     if (idx === null || idx === undefined) return
     if (saveBlockIndexByDocx.get(idx) !== at) return
     const group = sdtGroupOf.get(idx)
@@ -2115,7 +2135,7 @@ export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): Save
       saveBlocks.push(revision ? { ...block, revision } : block)
     }
     if (node.type === 'docTable') {
-      const idx = node.attrs?.docxIndex as number | null
+      const idx = anchorOf(node)
       const original =
         idx !== null && idx !== undefined && !usedIndexes.has(idx)
           ? originalByIndex.get(idx)
@@ -2162,7 +2182,7 @@ export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): Save
       continue
     }
     if (node.type === 'docProtected') {
-      const idx = node.attrs?.docxIndex as number | null
+      const idx = anchorOf(node)
       if (idx !== null && idx !== undefined && originalByIndex.has(idx) && !usedIndexes.has(idx)) {
         usedIndexes.add(idx)
         mapAnchor(idx)
@@ -2492,7 +2512,7 @@ export function pmDocToSavePlan(inputDoc: PmNode, originalBlocks: Block[]): Save
     }
 
     const generated = pmNodeToGeneratedBlock(node)
-    const idx = node.attrs?.docxIndex as number | null
+    const idx = anchorOf(node)
     const original = idx !== null && idx !== undefined ? originalByIndex.get(idx) : undefined
     if (
       original &&

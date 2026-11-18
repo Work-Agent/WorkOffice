@@ -122,7 +122,7 @@ export function inheritFrom(
   for (const [key, value] of Object.entries(own)) {
     // blockNode() always emits these as null / true; they are not model choices
     if ((key === 'docxIndex' || key === 'styleId') && value === null) continue
-    if (key === 'aiChanged') continue
+    if (key === 'aiChanged' || key === 'blockId') continue
     attrs[key] = value
   }
   if (next.type === 'docListItem' && old.attrs.kind === own.kind && old.attrs.numId) {

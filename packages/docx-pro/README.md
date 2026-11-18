@@ -42,6 +42,22 @@
 用同一个 `writeModeOf` 裁决 `bytes` 与 `plan`）。要同时保留「页面整份序列化」与
 「无页面 block 切片」，只能让页面也交计划——`kind: 'bytes'` 就是它的计划形态。
 
+## 撤销与保存
+
+编辑器的顶层块有两个身份：
+
+- `blockId`：编辑器身份，打开文档时生成，编辑 / 撤销 / 重做保持不变。
+- `docxIndex`：保存文件里的坐标，每次保存后可能变化。
+
+页面维护 `blockId -> docxIndex` 的 `anchorMap`。保存只更新这份映射和 `word/document.xml`，不再 `setContent` 重挂整个 PM 文档，因此：
+
+- 保存 / 自动保存不会清空 undo / redo
+- 从打开文档到关闭文档，同一套历史可以跨多次保存撤销
+- Agent 写入后的保存同样保留历史
+- 打开 / 新建 / 切换文档才清空历史
+
+历史深度默认 1000 步（`UndoRedo.configure`）。
+
 ## 2. 目录
 
 ```text

@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-docx-pro",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Word 文档（.docx）：完整编辑器 + LLM 命令面。页面交整份字节，执行点交块级切片，字节只由 exec 产生。",
   "author": "work-studio",
   "license": "Apache-2.0",
