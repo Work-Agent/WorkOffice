@@ -1,8 +1,8 @@
 // ─── engine.read：只读投影与只读工具的实现 ─────────────────────────────
 //
 // 契约 §6.2：read / plan 只返回可序列化投影，不返回渲染模型、不返回大字节。
-// 宿主把 readOnly 工具交给执行点（页面代理不承载读），所以这里必须能从字节
-// 侧独立回答——不能依赖编辑器（tiptap / DOM / docx-engine 的页面态）。
+// 宿主把 readOnly 工具交给执行点（无页面时读磁盘字节）；有页面时页面代理
+// 用 buildDocBytes() 序列化 live 文档后调用同一个 readMany()，两边语义一致。
 //
 // 只解析需要的 zip 条目：document.xml（块）、comments.xml、footnotes.xml、
 // endnotes.xml、styles.xml。其余条目（媒体、图表）一律不解。
@@ -18,6 +18,7 @@ import {
 import { projectModel, type ProjectMeta } from '../shared/project'
 import { paragraphTextOf, tableSizeOf } from '../shared/xml-ops'
 import type { ModelBlock } from '../shared/types'
+import { coded } from './abi'
 
 export const MAX_READ_TEXT = 200_000
 
@@ -193,6 +194,34 @@ export function documentContext(
     `统计：段落 ${paragraphs.length}，表格 ${tables.length}，标题 ${headings.length}，正文字符 ${chars}`,
     '说明：无页面路径没有「当前选区」；用块索引（[n]）定位。',
   ].join('\n')
+}
+
+/** `docx_read` 的全部 what 分发（执行点与页面同源；页面传入 live 序列化字节）。 */
+export const READ_WHAT = new Set([
+  'context',
+  'blocks',
+  'comments',
+  'notes',
+  'revisions',
+  'styles',
+  'audit',
+])
+
+export function readMany(bytes: Uint8Array, params: Record<string, unknown>): string {
+  const what = String(params['what'] ?? 'context')
+  if (!READ_WHAT.has(what))
+    throw coded('command.invalid', `what 非法：${what}（可用：${[...READ_WHAT].join(' / ')}）`)
+  if (what === 'comments') return readComments(bytes)
+  if (what === 'notes') return readNotes(bytes)
+  if (what === 'styles') return readStyles(bytes)
+  if (what === 'audit') return audit(parse(bytes))
+  if (what === 'revisions') return readRevisions(bytes, parse(bytes))
+  if (what === 'blocks') return readBlocks(parse(bytes), params)
+  return documentContext(parse(bytes), {
+    ...(typeof params['name'] === 'string' ? { name: params['name'] } : {}),
+    ...(typeof params['version'] === 'string' ? { version: params['version'] } : {}),
+    ...(typeof params['epoch'] === 'number' ? { epoch: params['epoch'] } : {}),
+  })
 }
 
 // ─── 工具：批注 / 脚注 / 修订 / 样式 ───────────────────────────────────

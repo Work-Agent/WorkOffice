@@ -68,10 +68,14 @@ export interface AppBridgeApi {
 export interface AgentContextRequest {
   type: 'agent-request'
   id: string
-  kind: 'context' | 'apply'
+  kind: 'context' | 'read' | 'apply'
   txnId: string
   version?: string
   epoch?: number
+  /** kind:'read' 的工具名（宿主透传）；缺省时按参数形状判断。 */
+  tool?: string
+  /** kind:'read' 的读请求 */
+  read?: Record<string, unknown>
   commands?: unknown[]
   dryRun?: boolean
 }

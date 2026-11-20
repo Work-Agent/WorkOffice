@@ -44,15 +44,7 @@ const LEGACY_READERS: Record<
   docx_check: (bytes) => read.audit(read.parse(bytes)),
 }
 
-const READ_WHAT = new Set([
-  'context',
-  'blocks',
-  'comments',
-  'notes',
-  'revisions',
-  'styles',
-  'audit',
-])
+const READ_WHAT = read.READ_WHAT
 
 export async function plan(req: PlanRequest, ctx: EngineCtx): Promise<PlanOutcome> {
   const params = (req.params ?? {}) as Record<string, unknown>
@@ -115,24 +107,16 @@ export async function plan(req: PlanRequest, ctx: EngineCtx): Promise<PlanOutcom
 // ─── docx_read ─────────────────────────────────────────────────────────
 
 function readOutcome(bytes: Uint8Array, params: Record<string, unknown>): PlanOutcome {
-  const what = String(params['what'] ?? 'context')
   try {
-    if (!READ_WHAT.has(what))
-      throw coded(
-        'command.invalid',
-        `what 非法：${what}（可用：${[...READ_WHAT].join(' / ')}）`,
-      )
-    if (what === 'comments') return text(read.readComments(bytes))
-    if (what === 'notes') return text(read.readNotes(bytes))
-    if (what === 'styles') return text(read.readStyles(bytes))
-    if (what === 'audit') return text(read.audit(read.parse(bytes)))
-    if (what === 'revisions') return text(read.readRevisions(bytes, read.parse(bytes)))
-    if (what === 'blocks') return text(read.readBlocks(read.parse(bytes), params))
-    return text(contextOf(bytes, params))
+    return text(read.readMany(bytes, params))
   } catch (error) {
     if (error instanceof DocxParseError) throw coded('command.invalid', messageOf(error))
     throw error
   }
+}
+
+function text(summary: string): PlanOutcome {
+  return { plan: { kind: 'noop' }, summary }
 }
 
 function contextOf(bytes: Uint8Array, params: Record<string, unknown>): string {
@@ -141,10 +125,6 @@ function contextOf(bytes: Uint8Array, params: Record<string, unknown>): string {
     ...(typeof params['version'] === 'string' ? { version: params['version'] } : {}),
     ...(typeof params['epoch'] === 'number' ? { epoch: params['epoch'] } : {}),
   })
-}
-
-function text(summary: string): PlanOutcome {
-  return { plan: { kind: 'noop' }, summary }
 }
 
 // ─── docx_apply ────────────────────────────────────────────────────────

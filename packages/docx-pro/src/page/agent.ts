@@ -11,10 +11,11 @@
 
 import type { Editor } from '@tiptap/core'
 import { executeTool } from '../editor/ai/tools'
-import { save, type FileActionContext } from '../editor/file-actions'
+import { buildDocBytes, save, type FileActionContext } from '../editor/file-actions'
 import { buildDocContext } from '../editor/ai/protocol'
 import { applyBlockCommands, BlockCommandError } from './block-commands'
 import { applyCommandBatch, numIdsFor } from './command-batch'
+import { readMany } from '../engine/read'
 import type { AgentContextRequest, DocxProBridge, Receipt } from './env'
 import type { DocxHost } from './host'
 
@@ -106,6 +107,36 @@ async function handle(
 ): Promise<{ context?: unknown; receipt?: Receipt }> {
   const editor = editorOf()
   if (request.kind === 'context') return { context: contextOf(editor, deps, docRevOf) }
+
+  // 只读工具进页面时读 live 文档（含未保存修改），不回退磁盘。
+  if (request.kind === 'read') {
+    const tool = String(request.tool ?? '')
+    const params = (request.read ?? {}) as AnyRecord
+    // 命令目录不依赖文档内容：交给执行点生成。
+    if (
+      tool === 'docx_guide' ||
+      tool === 'docx.guide' ||
+      params['group'] !== undefined ||
+      params['op'] !== undefined
+    )
+      throw coded('command.unsupported', `只读命令目录走执行点：${tool || 'docx_guide'}`)
+    // 旧宿主没传 tool：无 what 时无法区分 docx_read（默认 context）与无参 guide。
+    if (!tool && params['what'] === undefined)
+      throw coded('command.unsupported', '旧宿主未提供工具名，无法区分读投影与命令目录')
+
+    const ctx = bridgeOf().getCtx() as FileActionContext
+    if (!ctx?.doc) throw coded('command.page-unavailable', '文档尚未加载完成')
+    const bytes = await buildDocBytes(ctx)
+    if (!bytes) throw coded('command.page-unavailable', '读取时无法序列化当前文档')
+    return {
+      context: readMany(bytes, {
+        name: ctx.doc.fileName,
+        version: deps.host.getVersion(),
+        epoch: deps.host.getEpoch(),
+        ...params,
+      }),
+    }
+  }
 
   // 新鲜度：位置型坐标只在同一份基线上有效（契约 §8.3）。
   if (request.epoch !== undefined && request.epoch !== deps.host.getEpoch())
