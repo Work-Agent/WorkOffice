@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro']
+const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro', 'pdf']
 
 // WorkStudio 0.3+ 的插件根：<profile>/data/plugins（profile = appData/<产品名>）。
 // 0.2 及更早用的是 <profile>/plugins，两代都保留可写路径，靠 --target 覆盖。

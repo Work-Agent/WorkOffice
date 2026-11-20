@@ -43,6 +43,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Test PDF plugin
+        run: pnpm test:pdf
+
       - name: Verify URA contract
         run: pnpm verify
 

@@ -156,3 +156,6 @@ release/
 
 # wasm 构建中间产物（Rust 副本 + cargo target）
 packages/xlsx-pro/build/
+
+# PDF 插件 dev / build 期间生成的 pdfjs 静态资源
+packages/pdf/src/page/pdfjs/

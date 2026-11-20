@@ -6,19 +6,21 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter './packages/*' build",
+    "build": "pnpm --filter \"./packages/*\" run build",
     "build:docx": "pnpm --filter @workstudio/plugin-docx build",
     "build:docx-pro": "pnpm --filter @workstudio/plugin-docx-pro build",
-    "typecheck": "pnpm --filter './packages/*' typecheck",
-    "clean": "pnpm --filter './packages/*' clean",
+    "typecheck": "pnpm --filter \"./packages/*\" run typecheck",
+    "clean": "pnpm --filter \"./packages/*\" run clean",
     "setup": "node scripts/setup-genoffice.mjs && pnpm install",
     "install:plugins": "node scripts/install.mjs",
-    "build:codec": "pnpm --filter './packages/*' build:ura",
+    "build:codec": "pnpm --filter \"./packages/*\" run build:ura",
     "verify": "node scripts/verify-contract.mjs",
     "install:builtin": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
     "pack:plugins": "node scripts/pack.mjs",
     "build:xlsx-pro": "pnpm --filter @workstudio/plugin-xlsx-pro build",
-    "build:pptx-pro": "pnpm --filter @workstudio/plugin-pptx-pro build"
+    "build:pptx-pro": "pnpm --filter @workstudio/plugin-pptx-pro build",
+    "build:pdf": "pnpm --filter @workstudio/plugin-pdf build",
+    "test:pdf": "pnpm --filter @workstudio/plugin-pdf test"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF 文档</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #eef0f3;
+        color: #1f2430;
+        font:
+          13px/1.5 'Segoe UI',
+          'PingFang SC',
+          'Microsoft YaHei',
+          system-ui,
+          sans-serif;
+      }
+
+      .ws-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 24px;
+        text-align: center;
+        white-space: pre-wrap;
+      }
+
+      .ws-boot[data-error='1'] {
+        color: #b91c1c;
+        user-select: text;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ws-boot">正在打开 PDF…</div>
+    <div id="root"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

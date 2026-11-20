@@ -1,0 +1,44 @@
+{
+  "name": "@workstudio/plugin-pdf",
+  "version": "0.1.1",
+  "description": "PDF 只读查看器：PDF.js 真字节渲染 + WorkStudio 页面会话分块读",
+  "author": "work-studio",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ura": "./dist/ura.js"
+  },
+  "workstudio": {
+    "id": "pdf",
+    "label": "PDF 文档",
+    "icon": "eye",
+    "page": "dist/page/index.html",
+    "apiVersion": 2,
+    "content": "pulled"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:ura": "node scripts/build.mjs --ura-only",
+    "build:page": "node scripts/build.mjs --page-only",
+    "dev": "node scripts/build.mjs --assets-only && vite",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.2.108",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

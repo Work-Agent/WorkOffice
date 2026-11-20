@@ -7,3 +7,10 @@ Apache License, Version 2.0.
 
 The GenOffice source is consumed as the `vendor/genoffice` git submodule.
 Its LICENSE and NOTICE files are retained in that submodule.
+
+The PDF plugin (`packages/pdf`) bundles the following third-party software:
+
+- PDF.js (pdfjs-dist), Copyright Mozilla Foundation, licensed under the
+  Apache License, Version 2.0 (https://github.com/mozilla/pdf.js).
+- pdf-lib, Copyright Andrew Dillon and contributors, licensed under the
+  MIT License (https://github.com/Hopding/pdf-lib).

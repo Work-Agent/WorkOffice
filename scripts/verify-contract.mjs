@@ -6,7 +6,7 @@
 // 只检查注册面（codec / presenter / sidecar）与键；不打开真实文档。
 // 需要先运行 `pnpm build:codec`。
 
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -43,6 +43,13 @@ const PLUGINS = [
     surface: 'pptx-pro',
     extensions: ['pptx', 'pptm', 'potx'],
   },
+  {
+    id: 'pdf',
+    mime: 'application/pdf',
+    surface: 'pdf-viewer',
+    extensions: ['pdf'],
+    readonly: true,
+  },
 ]
 
 let failed = 0
@@ -64,6 +71,21 @@ for (const plugin of PLUGINS) {
   }
 
   const seen = { codecs: [], presenters: [], sidecars: [] }
+  const manifest = JSON.parse(
+    await readFile(join(root, 'packages', plugin.id, 'package.json'), 'utf8'),
+  )
+  if (plugin.readonly) {
+    check(
+      manifest.workstudio?.write === undefined,
+      '只读插件不应声明 workstudio.write',
+    )
+    check(
+      manifest.workstudio?.content === 'pulled',
+      "只读查看器应声明 workstudio.content: 'pulled'",
+    )
+    check(manifest.workstudio?.tools === undefined, '只读插件不应声明 tools')
+    check(manifest.workstudio?.engine === undefined, '只读插件不应声明 engine')
+  }
   globalThis.__workstudioSdk = {
     registerTransport() {},
     registerStore() {},

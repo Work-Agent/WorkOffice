@@ -19,7 +19,7 @@ import { zipSync } from 'fflate'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const release = join(root, 'release')
-const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro']
+const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro', 'pdf']
 
 async function walk(dir, base = dir) {
   const out = []

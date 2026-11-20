@@ -38,7 +38,7 @@ jobs:
 
       - name: Validate release tag
         run: |
-          for id in docx xlsx pptx; do
+          for id in docx xlsx pptx pdf; do
             version=$(node -p "require('./packages/${id}/package.json').version")
             if [ "v${version}" != "${{ github.ref_name }}" ]; then
               echo "tag ${{ github.ref_name }} does not match packages/${id} version ${version}" >&2

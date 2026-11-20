@@ -1,0 +1,37 @@
+/* 查看器所需语义 token 子集：映射 WorkStudio 的 data-theme，
+   不 import @genoffice/ui（避免跨仓库运行时依赖）。 */
+
+:root,
+[data-theme='light'] {
+  --pdf-bg: #eef0f3;
+  --pdf-surface: #ffffff;
+  --pdf-surface-2: #f7f8fa;
+  --pdf-text: #1f2430;
+  --pdf-muted: #6b7280;
+  --pdf-border: #d7dbe2;
+  --pdf-accent: #2563eb;
+  --pdf-accent-weak: rgba(37, 99, 235, 0.12);
+  --pdf-hover: rgba(15, 23, 42, 0.06);
+  --pdf-danger: #b91c1c;
+  --pdf-warn-bg: #fff7e6;
+  --pdf-warn-border: #f0c36d;
+  --pdf-shadow: 0 1px 3px rgba(15, 23, 42, 0.14), 0 8px 24px rgba(15, 23, 42, 0.08);
+  --pdf-hit: rgba(255, 214, 10, 0.45);
+}
+
+[data-theme='dark'] {
+  --pdf-bg: #17191d;
+  --pdf-surface: #24272d;
+  --pdf-surface-2: #1d2025;
+  --pdf-text: #e8eaee;
+  --pdf-muted: #9aa2ad;
+  --pdf-border: #363b43;
+  --pdf-accent: #6ea8fe;
+  --pdf-accent-weak: rgba(110, 168, 254, 0.18);
+  --pdf-hover: rgba(255, 255, 255, 0.08);
+  --pdf-danger: #f87171;
+  --pdf-warn-bg: #3a2f1a;
+  --pdf-warn-border: #8a6d2c;
+  --pdf-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --pdf-hit: rgba(255, 214, 10, 0.35);
+}
