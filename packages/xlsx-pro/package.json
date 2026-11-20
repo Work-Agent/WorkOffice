@@ -37,7 +37,7 @@
     "build:engine": "node scripts/build.mjs --engine-only",
     "build:page": "node scripts/build.mjs --page-only",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/engine.test.mjs tests/ura.test.mjs tests/chunks.test.mjs tests/session-bytes.test.mjs tests/save-parity.test.mjs tests/save-plan.test.mjs tests/wasm.test.mjs tests/page-read.test.mjs",
+    "test": "node --experimental-strip-types --test tests/engine.test.mjs tests/tokens.test.mjs tests/ura.test.mjs tests/chunks.test.mjs tests/session-bytes.test.mjs tests/save-parity.test.mjs tests/save-plan.test.mjs tests/wasm.test.mjs tests/page-read.test.mjs",
     "verify": "node scripts/verify.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:seed": "node scripts/gen-seed.mjs",

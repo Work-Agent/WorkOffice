@@ -16,7 +16,7 @@ import {
 } from '@genoffice/xlsx-gateway/domain/workbook-dsl'
 import { formatAddress, parseRange } from '@genoffice/xlsx-gateway/domain/cell-address'
 import { normalizeSheetRefs } from '../editor/mcp-sheet-refs'
-import { opTier, tokenNeeds } from '../shared/op-tiers'
+import { opTier, resolveTokens, tokenNeeds } from '../shared/op-tiers'
 import type { AgentContextRequest, Receipt } from './env'
 
 export interface AgentBridgeDeps {
@@ -27,6 +27,18 @@ type AnyRecord = Record<string, unknown>
 
 /** 页面读投影的单次上限：超过就截断并明说，不静默。 */
 const MAX_READ_CELLS = 2_000
+
+/** 页面读投影的文本上限（与无页面 `xlsx_read` 的 200 KB 对齐，留一点余量）。 */
+const MAX_READ_TEXT = 120_000
+
+/**
+ * 真正需要页面 live 模型的只读工具。
+ *
+ * `xlsx_guide` 是静态命令目录：进页面只会拿到一份与本意无关的投影
+ * （之前 guide 就掉进了 range 分支）。回 `command.unsupported`，
+ * 宿主就会走执行点那份唯一事实源。
+ */
+const PAGE_READ_TOOLS = new Set(['xlsx_read', 'xlsx.read'])
 
 function coded(code: string, message: string): Error & { code: string } {
   const error = new Error(message) as Error & { code: string }
@@ -91,7 +103,14 @@ async function handle(
     }
   }
 
-  if (request.kind === 'read') return { context: readFromPage(page, request.read) }
+  if (request.kind === 'read') {
+    if (request.tool && !PAGE_READ_TOOLS.has(request.tool))
+      throw coded(
+        'command.unsupported',
+        `${request.tool} 不需要页面模型：请由宿主走执行点（静态目录 / 结构化读）`,
+      )
+    return { context: clipContext(readFromPage(page, request.read)) }
+  }
 
   return applyOnPage(page, h, request)
 }
@@ -126,15 +145,22 @@ async function applyOnPage(
   }
 
   const needs = tokenNeeds(allOps)
+  // 令牌来源：消息顶层（宿主透传）→ 命令入参（旧名 epoch / revision）→ 报错。
+  // 宿主曾经从来不透传，而入参里叫 `epoch`、校验点只认 `structureEpoch`，
+  // 于是含 A1 坐标的批次 100% 被拒。
+  const supplied = resolveTokens({
+    message: { docRev: request.docRev, structureEpoch: request.structureEpoch },
+    commands,
+  })
   if (needs.structureEpoch) {
     const current = page.structureEpoch()
-    if (request.structureEpoch !== undefined && request.structureEpoch !== current)
+    if (supplied.structureEpoch !== undefined && supplied.structureEpoch !== current)
       throw coded(
         'command.stale-index',
-        `工作表结构已变（structureEpoch ${request.structureEpoch} → ${current}）；` +
+        `工作表结构已变（structureEpoch ${supplied.structureEpoch} → ${current}）；` +
           `批内含 A1 绝对坐标命令，重新读取区域后再发命令`,
       )
-    if (request.structureEpoch === undefined)
+    if (supplied.structureEpoch === undefined)
       throw coded(
         'command.stale-index',
         '批内含 A1 绝对坐标命令，必须带上读到上下文时的 structureEpoch',
@@ -142,13 +168,13 @@ async function applyOnPage(
   }
   if (needs.docRev) {
     const current = page.docRev()
-    if (request.docRev !== undefined && request.docRev !== current)
+    if (supplied.docRev !== undefined && supplied.docRev !== current)
       throw coded(
         'command.stale-index',
-        `页面内容已变（docRev ${request.docRev} → ${current}）；` +
+        `页面内容已变（docRev ${supplied.docRev} → ${current}）；` +
           `批内含读内容型命令（fill/copy/sort/find），重新读取后再发命令`,
       )
-    if (request.docRev === undefined)
+    if (supplied.docRev === undefined)
       throw coded('command.stale-index', '批内含读内容型命令，必须带上读到上下文时的 docRev')
   }
 
@@ -164,6 +190,8 @@ async function applyOnPage(
       applied: 0,
       wouldApply: Number(planned['cellChangeCount'] ?? 0) +
         (Array.isArray(planned['structuralChanges']) ? planned['structuralChanges'].length : 0),
+      // dry-run 不改模型：令牌原样带回，宿主可以直接用于下一条真写。
+      ...tokens(page),
     }
   }
 
@@ -197,7 +225,9 @@ async function applyOnPage(
 
   const receipt = h.getReceipt()
   if (!receipt) throw coded('command.invalid', '提交未返回回执')
-  return { receipt: { ...receipt, applied: requested }, requested, applied: requested }
+  // 回执 + 新令牌：写完 docRev / structureEpoch 都变了，不回令牌的话
+  // 下一条命令只能靠“重新 read”才能拿到（之前只回 receipt，槽位永远落后）。
+  return { receipt: { ...receipt, applied: requested }, requested, applied: requested, ...tokens(page) }
 }
 
 // ─── 读投影 ────────────────────────────────────────────────────────────
@@ -215,7 +245,11 @@ function readFromPage(
     ...tokens(page),
   }
 
-  if (request.what === 'sheets') {
+  // 缺省 what 必须是 sheets：之前只匹配 'sheets' 字面量，undefined 就直接
+  // 掉进 range 分支，于是“读概览”变成一张 1000×52 的空表 dump。
+  const wanted = String(request.what ?? 'sheets')
+
+  if (wanted === 'sheets') {
     const sheets = (ctx['sheets'] as Array<AnyRecord> | undefined) ?? []
     const lines = ['# 工作表', ...sheets.map((sheet) =>
       `- ${String(sheet['name'])}${sheet['rows'] ? ` · ${String(sheet['rows'])} 行` : ''}${
@@ -225,7 +259,7 @@ function readFromPage(
     return { ...base, text: lines.join('\n'), sheets: page.sheets() }
   }
 
-  if (request.what === 'audit') {
+  if (wanted === 'audit') {
     const sheets = page.sheets()
     const ctxLines = [
       '# 页面审计',
@@ -236,8 +270,24 @@ function readFromPage(
     return { ...base, text: ctxLines.join('\n'), sheets }
   }
 
+  // 概览 / 元数据：页面已经持有这些信息，不必再扫单元格。
+  // `meta` 额外带上原始 context（页面重建 file 模型用）。
+  if (wanted === 'context' || wanted === 'meta') {
+    const text = contextTextOf(ctx)
+    return wanted === 'meta'
+      ? { ...base, text, sheets: page.sheets(), data: ctx }
+      : { ...base, text, sheets: page.sheets() }
+  }
+
+  // cells / formulas 之外的结构化读和未知值一律交回宿主：
+  // 宿主收到 command.unsupported 会落回执行点（wasm 结构化读 / 静态目录）。
+  if (wanted !== 'range' && wanted !== 'formulas' && wanted !== 'find')
+    throw coded(
+      'command.unsupported',
+      `页面读不支持 what=${wanted}（页面支持：context / meta / sheets / range / formulas / find / audit）`,
+    )
+
   // range / formulas / find 都基于 live 单元格
-  const wanted = request.what
   const bounds = rangeBoundsOf(request, ctx)
   const sheetName = bounds.sheet
   const sheet = page.sheets().find((entry) => entry.name === sheetName) ??
@@ -303,18 +353,19 @@ function readFromPage(
     }
   }
 
-  // range
+  // range：只打印真正取到地址的行（之前无论 truncated 与否都把整个 bounds
+  // 走一遍，A1:AZ1000 会输出 5 万多格几乎全空的行）。
   const lines: string[] = [`# ${sheetName}!${bounds.range}`]
-  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
-    const rowCells: string[] = []
-    for (let column = bounds.startColumn; column <= bounds.endColumn; column += 1) {
-      const cell = cells[formatAddress(row, column)]
+  const width = bounds.endColumn - bounds.startColumn + 1
+  for (let offset = 0; offset < addresses.length; offset += width) {
+    const rowCells = addresses.slice(offset, offset + width).map((address) => {
+      const cell = cells[address]
       const shown = cell?.value ?? cell?.display ?? ''
-      rowCells.push(String(shown).replace(/\t/g, ' ').replace(/\n/g, ' '))
-    }
-    lines.push(`${row + 1}\t${rowCells.join('\t')}`)
+      return String(shown).replace(/\t/g, ' ').replace(/\n/g, ' ')
+    })
+    lines.push(`${bounds.startRow + Math.floor(offset / width) + 1}\t${rowCells.join('\t')}`)
   }
-  if (truncated) lines.push(`…（超过 ${MAX_READ_CELLS} 格，已截断）`)
+  if (truncated) lines.push(`…（超过 ${MAX_READ_CELLS} 格，已截断；用更小的 range）`)
   return { ...base, text: lines.join('\n'), truncated }
 }
 
@@ -335,16 +386,88 @@ function rangeBoundsOf(
   )
   if (!sheetName) throw coded('command.invalid', '缺少 sheet')
   const meta = sheets.find((entry) => entry['name'] === sheetName)
-  const text = request.range ?? `${request.start ?? 'A1'}:${request.end ?? ''}`
-  if (text && !text.endsWith(':')) {
+  const requested =
+    request.range ??
+    (request.start || request.end
+      ? `${request.start ?? 'A1'}:${request.end ?? ''}`
+      : null)
+  // 未给范围（或只给了起点）时，优先用页面已知的已加载范围 / 当前选区，
+  // 而不是页表尺寸（1000×52）——那份 dump 既浪费上下文也不代表 used range。
+  const text = requested && !requested.endsWith(':') ? requested : defaultRangeOf(ctx)
+  if (text) {
     const bounds = parseRange(text)
     return { sheet: sheetName, range: text, ...bounds }
   }
-  // 没给范围时用页面已知的表尺寸（缺失时退回 A1:H50），避免扫整张表。
+  // 连已加载范围都不知道：退回表尺寸（仍受 MAX_READ_CELLS 限制）。
   const rows = Number(meta?.['rows'] ?? 50)
   const columns = Number(meta?.['columns'] ?? 8)
   const range = `A1:${formatAddress(Math.max(0, rows - 1), Math.max(0, columns - 1))}`
   return { sheet: sheetName, range, ...parseRange(range) }
+}
+
+/**
+ * 页面已知的“有意义范围”：已加载区 → 当前选区。
+ * 两者都没有时返回 null，由调用方决定退路。
+ */
+function defaultRangeOf(ctx: AnyRecord): string | null {
+  const loaded = ctx['loadedRange']
+  if (typeof loaded === 'string' && loaded) return loaded
+  const selection = ctx['selection']
+  if (typeof selection === 'string' && selection) {
+    const part = selection.includes('!')
+      ? selection.slice(selection.indexOf('!') + 1)
+      : selection
+    if (part.includes(':')) return part
+  }
+  return null
+}
+
+/** 页面概览（与无页面 `contextText` 同构，但只报页面真知道的事）。 */
+function contextTextOf(ctx: AnyRecord): string {
+  const sheets = (ctx['sheets'] as Array<AnyRecord> | undefined) ?? []
+  const lines = ['# workbook.xlsx', `sheets=${sheets.length}`]
+  for (const sheet of sheets) {
+    const rows = sheet['rows']
+    const columns = sheet['columns']
+    const extent =
+      typeof rows === 'number' && typeof columns === 'number'
+        ? ` rows=${rows} columns=${columns}`
+        : ''
+    lines.push(
+      `- ${String(sheet['name'])} id=${String(sheet['id'])}${extent}` +
+        (sheet['readOnlyOversized'] === true ? ' readOnlyOversized' : ''),
+    )
+  }
+  const active = ctx['sheetName']
+  if (typeof active === 'string' && active)
+    lines.push(
+      `active=${active}` +
+        (typeof ctx['selection'] === 'string' && ctx['selection'] ? ` selection=${ctx['selection']}` : ''),
+    )
+  const loaded = ctx['loadedRange']
+  if (typeof loaded === 'string' && loaded) lines.push(`loaded=${loaded}`)
+  const merges = ctx['merges']
+  if (Array.isArray(merges) && merges.length > 0)
+    lines.push(
+      `merges=${merges.length}（${merges.slice(0, 12).map((entry) => String(entry)).join(' ')}` +
+        `${merges.length > 12 ? ' …' : ''}）`,
+    )
+  lines.push('（页面 live 模型：含未保存修改；逐格内容用 what=range）')
+  return lines.join('\n')
+}
+
+/**
+ * 读投影太长就截断并明说：一屏上下文比“半个 A1:AZ1000”有用。
+ */
+function clipContext(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value
+  const record = value as AnyRecord
+  const text = record['text']
+  if (typeof text !== 'string' || text.length <= MAX_READ_TEXT) return value
+  return {
+    ...record,
+    text: `${text.slice(0, MAX_READ_TEXT)}\n…（已截断：超过 ${MAX_READ_TEXT} 字符，用 range 缩小范围）`,
+  }
 }
 
 function safeRegExp(query: string, matchCase: boolean): RegExp | null {

@@ -198,12 +198,16 @@ export function parseStyles(xml: string | null): CellStyle[] {
     const numberFormat = custom.get(numFmtId) ?? BUILTIN_FORMATS[numFmtId]
     const alignment = record.alignment as Record<string, unknown> | undefined
     const horizontal = attr(alignment, 'horizontal')
+    const vertical = attr(alignment, 'vertical')
     return {
       ...font,
       ...(fill ? { fillColor: fill } : {}),
       ...(numberFormat && numberFormat !== 'General' ? { numberFormat } : {}),
       ...(horizontal === 'center' || horizontal === 'right' || horizontal === 'left'
         ? { align: horizontal }
+        : {}),
+      ...(vertical === 'top' || vertical === 'center' || vertical === 'bottom'
+        ? { vertical }
         : {}),
       ...(attr(alignment, 'wrapText') === '1' ? { wrap: true } : {}),
     } satisfies CellStyle
@@ -301,6 +305,8 @@ export function parseWorkbook(bytes: Uint8Array): SheetLike[] {
       parsed = {}
     }
     const cells: Record<string, CellLike> = {}
+    // 空值但有样式的格子进不了 cells（会先 `continue`），但复制/沿用格式要它们。
+    const formats: Record<string, CellStyle> = {}
     const colWidths: Record<string, number> = {}
     const rowHeights: Record<string, number> = {}
     const merges: string[] = []
@@ -332,9 +338,10 @@ export function parseWorkbook(bytes: Uint8Array): SheetLike[] {
           const numeric = Number(rawValue)
           value = Number.isFinite(numeric) ? numeric : rawValue
         }
-        if (value === null && formula === undefined) continue
         const styleIndex = Number(attr(cell, 's'))
         const style = Number.isFinite(styleIndex) ? styles[styleIndex] : undefined
+        if (style && Object.keys(style).length > 0) formats[address] = style
+        if (value === null && formula === undefined) continue
         cells[address] = {
           value,
           ...(formula !== undefined ? { formula: `=${formula}` } : {}),
@@ -362,6 +369,7 @@ export function parseWorkbook(bytes: Uint8Array): SheetLike[] {
       name,
       path,
       cells,
+      ...(Object.keys(formats).length ? { formats } : {}),
       ...(merges.length ? { merges } : {}),
       ...(Object.keys(colWidths).length ? { colWidths } : {}),
       ...(Object.keys(rowHeights).length ? { rowHeights } : {}),

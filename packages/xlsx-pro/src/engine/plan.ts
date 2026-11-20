@@ -59,9 +59,16 @@ export async function plan(req: PlanRequest, ctx: EngineCtx): Promise<PlanOutcom
     }
   }
 
-  const bytes = req.bytes ?? (await ctx.readBytes()).bytes
+  const source = req.bytes
+    ? {
+        bytes: req.bytes,
+        // 宿主默认会把基线版本一起送来；没送就自己读一次（旧宿主 / 测试）。
+        version: req.baseVersion ?? (await ctx.readBytes()).version,
+      }
+    : await ctx.readBytes()
+  const bytes = source.bytes
 
-  if (tool === 'xlsx_read' || tool === 'xlsx.read') return readOutcome(bytes, params)
+  if (tool === 'xlsx_read' || tool === 'xlsx.read') return readOutcome(bytes, params, source.version)
   if (tool === 'xlsx_apply' || tool === 'xlsx.apply') return applyOutcome(req, params, bytes)
 
   throw coded(
@@ -75,7 +82,11 @@ function text(summary: string): PlanOutcome {
   return { plan: { kind: 'text', text: summary }, summary }
 }
 
-async function readOutcome(bytes: Uint8Array, params: AnyRecord): Promise<PlanOutcome> {
+async function readOutcome(
+  bytes: Uint8Array,
+  params: AnyRecord,
+  version?: string,
+): Promise<PlanOutcome> {
   let view: WorkbookView
   try {
     view = await parseWorkbook(bytes)
@@ -85,14 +96,28 @@ async function readOutcome(bytes: Uint8Array, params: AnyRecord): Promise<PlanOu
   const what = String(params['what'] ?? 'context')
   const name = String(params['name'] ?? 'workbook.xlsx')
 
-  if (what === 'context') return text(requireRead(() => read.context(view, name)))
-  if (what === 'sheets') return text(requireRead(() => read.sheets(view)))
-  if (what === 'range') return text(requireRead(() => read.range(view, params)))
-  if (what === 'formulas') return text(requireRead(() => read.formulas(view, params)))
-  if (what === 'find') return text(requireRead(() => read.find(view, params)))
-  if (what === 'audit') return text(await read.audit(bytes, view))
+  if (what === 'context') return withVersion(text(requireRead(() => read.context(view, name))), version)
+  if (what === 'sheets') return withVersion(text(requireRead(() => read.sheets(view))), version)
+  if (what === 'range') return withVersion(text(requireRead(() => read.range(view, params))), version)
+  if (what === 'formulas') return withVersion(text(requireRead(() => read.formulas(view, params))), version)
+  if (what === 'find') return withVersion(text(requireRead(() => read.find(view, params))), version)
+  if (what === 'audit') return withVersion(text(await read.audit(bytes, view)), version)
 
   throw coded('command.invalid', `what 非法：${what}（可用：context / sheets / range / formulas / find / audit）`)
+}
+
+/**
+ * 只读结果头部带上基线版本。
+ *
+ * 无页面写（`xlsx_apply`）要求 `version` 必填（宿主 `requiresBaseVersion` 把关），
+ * 而它唯一的来源就是一次读。读不回版本 = 写永远发不出去（"需要基线版本"）。
+ */
+function withVersion(outcome: PlanOutcome, version?: string): PlanOutcome {
+  if (!version) return outcome
+  const plan = outcome.plan
+  if (plan.kind !== 'text') return outcome
+  const body = `version=${version}\n${plan.text}`
+  return { ...outcome, plan: { ...plan, text: body }, summary: body }
 }
 
 function requireRead(run: () => string): string {

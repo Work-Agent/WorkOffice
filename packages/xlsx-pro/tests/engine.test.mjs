@@ -42,6 +42,26 @@ test('工具声明：4 个工具 / 2 读 2 写', () => {
   assert.equal(tools.filter((tool) => tool.readOnly).length, 2)
   assert.equal(tools.find((tool) => tool.name === 'xlsx_apply').requiresBaseVersion, true)
   assert.equal(tools.find((tool) => tool.name === 'xlsx_create').requiresBaseVersion, false)
+  // 命令目录是静态的：不因页面开着而占用一次页面往返（否则拿到无意义的投影）。
+  assert.equal(tools.find((tool) => tool.name === 'xlsx_guide').pageRead, false)
+  assert.equal(tools.find((tool) => tool.name === 'xlsx_read').pageRead, undefined)
+})
+
+test('xlsx_apply 声明里暴露令牌参数（structureEpoch / docRev）', () => {
+  const apply = tools.find((tool) => tool.name === 'xlsx_apply')
+  const properties = apply.parameters.properties
+  assert.ok(properties.structureEpoch, '缺 structureEpoch 参数：模型无法把读到的令牌带回去')
+  assert.ok(properties.docRev, '缺 docRev 参数')
+})
+
+test('xlsx_read：无页面读也回基线版本（否则 apply 永远缺 version）', async () => {
+  const out = await read(SEED, { what: 'context' })
+  assert.match(out.summary, /^version=v1\n# workbook\.xlsx/)
+  assert.match(out.plan.text, /^version=v1\n/)
+  const sheets = await read(SEED, { what: 'sheets' })
+  assert.match(sheets.summary, /^version=v1\n/)
+  const found = await read(SEED, { what: 'find', query: 'a' })
+  assert.match(found.summary, /^version=v1\n/)
 })
 
 test('guide：分组 / 单条 / 未知 op', async () => {
@@ -217,4 +237,64 @@ test('read 模块导出 project / query / parseWorkbook', () => {
   assert.equal(typeof readMod.project, 'function')
   assert.equal(typeof readMod.query, 'function')
   assert.equal(typeof readMod.parseWorkbook, 'function')
+})
+
+/// 解析产物里某个单元格的“实际生效样式”：把 s= 索引翻成 cellXfs 里的那条 xf。
+/// 索引值本身不可比（同一样式可能对应多个 xf），但内容必须一致。
+function resolvedStyle(sheetXml, stylesXml, ref) {
+  const cellXfs = (stylesXml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/) || [, ''])[1]
+  const xfs = [...cellXfs.matchAll(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g)].map((m) => m[0])
+  const tag = (sheetXml.match(new RegExp(`<c\\b[^>]*\\br="${ref}"[^>]*>`)) || [''])[0]
+  const index = Number((tag.match(/\bs="(\d+)"/) || [])[1])
+  const xf = xfs[Number.isFinite(index) ? index : 0] ?? ''
+  // 去掉 xfId / 属性顺序差异，只留“字体 / 填充 / 边框 / 数字格式 / 对齐”事实。
+  return xf
+    .replace(/\s+xfId="\d+"/g, '')
+    .replace(/\s+apply\w+="0"/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+test('copy_range：样式 / 合并 / 行高一起复制（"按现有格式补一块"）', async () => {
+  // 1) 造一个“带格式的周报块”：标题加粗填充 + 内容区合并换行 + 行高
+  const first = await apply([
+    {
+      op: 'set_range',
+      sheet: 'Sheet1',
+      start: 'A1',
+      values: [['2026/11/16~2026/11/20周报'], ['智能体开发：本周完成……'], ['', '', '']],
+    },
+    { op: 'format_range', sheet: 'Sheet1', range: 'A1:C1', format: { bold: true, fontSize: 14, fillColor: '#DDEBF7' } },
+    { op: 'format_range', sheet: 'Sheet1', range: 'A2:C3', format: { wrapText: true, verticalAlign: 'top' } },
+    { op: 'merge_cells', sheet: 'Sheet1', range: 'A2:C3' },
+    { op: 'set_row_height', sheet: 'Sheet1', row: 1, heightPoints: 30 },
+  ])
+  // 2) 整块向下复制（+4 行）
+  const copied = await apply([{ op: 'copy_range', sheet: 'Sheet1', source: 'A1:C3', target: 'A5' }], first.bytes)
+  const sheetXml = strFromU8(unzipSync(copied.bytes)['xl/worksheets/sheet1.xml'])
+  const stylesXml = strFromU8(unzipSync(copied.bytes)['xl/styles.xml'])
+  // 样式：标题、内容、填充格（C3 是空值但有样式）都要跟着走
+  for (const [source, target] of [['A1', 'A5'], ['A2', 'A6'], ['C3', 'C7']]) {
+    assert.equal(
+      resolvedStyle(sheetXml, stylesXml, target),
+      resolvedStyle(sheetXml, stylesXml, source),
+      `${source} 的格式没有复制到 ${target}`,
+    )
+  }
+  // 合并区按偏移复制
+  assert.match(sheetXml, /<mergeCell ref="A2:C3"\/>/)
+  assert.match(sheetXml, /<mergeCell ref="A6:C7"\/>/)
+  // 行高按源行对应复制（px → pt 往返不产生偏差）
+  const rows = Object.fromEntries([...sheetXml.matchAll(/<row r="(\d+)"([^>]*)>/g)].map((m) => [m[1], m[2]]))
+  assert.match(rows['1'], /ht="30"/)
+  assert.match(rows['5'], /ht="30"/)
+})
+
+test('delete_sheet：删表不算“改动未涉及的 ZIP 条目”（I1 漂移检查）', async () => {
+  // 先建第二张表，再把它删掉：删除必须能落盘，而不是被漂移检查挡住。
+  const added = await apply([{ op: 'add_sheet', name: '探针表' }])
+  const removed = await apply([{ op: 'delete_sheet', sheet: '探针表' }], added.bytes)
+  const names = [...strFromU8(unzipSync(removed.bytes)['xl/workbook.xml']).matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)]
+    .map((m) => m[1])
+  assert.ok(!names.includes('探针表'), `探针表没有被删掉：${names.join('/')}`)
 })

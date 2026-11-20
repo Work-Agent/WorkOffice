@@ -10,7 +10,11 @@ description: 编辑工作区里的 .xlsx（Excel 工作簿）。四个工具：x
 | `xlsx_guide(<ref>, { group?, op? })` | 命令目录：四组 op 名 → 组内 schema → 单条 schema。**写之前先调它** |
 | `xlsx_read(<ref>, { what })` | 读：`context` / `sheets` / `range` / `formulas` / `find` / `audit` |
 | `xlsx_create(<ref>, { sheets })` | **新建**：`ref` 必须不存在；`sheets: [{ name, rows }]`，也支持 `rows` / `csv` |
-| `xlsx_apply(<ref>, { commands, version?, epoch?, revision?, dryRun? })` | 按顺序执行一批命令（≤200）。一条被拒 = 整批回滚 |
+| `xlsx_apply(<ref>, { commands, version?, structureEpoch?, docRev?, dryRun? })` | 按顺序执行一批命令（≤200）。一条被拒 = 整批回滚 |
+
+**读结果首行是令牌**：无页面只有 `version=…`；有页面还有 `epoch=… docRev=… structureEpoch=…`。
+写批里含 A1 坐标 / 结构类命令要 `structureEpoch`，内容型命令（fill/copy/sort/find）要 `docRev`；
+有页面时宿主会自动带上，你显式传的话以你的为准。
 
 ## 新建文件
 
@@ -42,10 +46,28 @@ xlsx_create("file:///w/2026预算.xlsx", {
 
 ## 三步循环
 
-1. `xlsx_read(<ref>, { what: "context" })` → 工作表名与范围；**工作表用名称，不要用会话 id**
+1. `xlsx_read(<ref>, { what: "context" })` → 令牌 + 工作表名与范围；**工作表用名称，不要用会话 id**
 2. `xlsx_guide(<ref>)` → 分组与 op 名；`{ group }` / `{ op }` 取 schema
 3. `xlsx_apply(<ref>, { commands: [{ op: "set_range", sheet: "Sheet1", start: "A1", values: [[...]] }] })`
    （不确定时先 `dryRun: true`）
+
+读不到内容（只有令牌行、或 `notices=` 说页面未响应）就先停下确认文件是否开着；
+不要靠换 `what` 反复重试。
+
+## 沿用现有格式（“按当前格式补充”类需求）
+
+`xlsx_read` **不返回**样式；`query` 也只有值。要沿用上一条记录的格式：
+
+1. 先 `xlsx_read({ what: "context" })` 拿到令牌与 `merges=`、行范围
+2. `copy_range` 把上一条记录的**整块**（含标题行、内容合并区、填充格）复制到新位置：
+   `{ op: "copy_range", sheet: "Sheet1", source: "A25:C32", target: "A33" }`
+   它会一起复制：值/公式、单元格样式（字体/填充/对齐/换行/数字格式）、
+   完全落在源区域内的合并区、以及源行的行高。
+3. 再用 `set_range` 只覆盖值（写值不动样式）；需要时补 `format_range`。
+
+源区域要覆盖整块（比如 `A25:C32` 而不是 `A25:A26`），否则合并区/填充格不会被带过去；
+边框与主题颜色不做推算，需要时用 `format_range` 显式补。
+不要为了看格式去读 PDF / 截图 / 反复 `audit`。
 
 ## 常用写法
 

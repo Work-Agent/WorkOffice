@@ -20,12 +20,46 @@ import {
 } from '@genoffice/xlsx-gateway/domain/cell-address'
 import type { CellScalar, CellState, WorksheetState } from '@genoffice/xlsx-gateway/domain/workbook.types'
 import { parseWorkbook as parseSheetLikeWorkbook } from './xlsx-parse'
+import type { CellStyle } from '../ura-types'
 
 export interface WorkbookView {
   snapshot: ImportedXlsx['snapshot']
   sheetNamesById: ImportedXlsx['sheetNamesById']
   sheets: WorksheetState[]
   byName: Map<string, WorksheetState>
+  /**
+   * 无页面侧的显式格式（工作表名 → 地址 → workbook DSL 风格的样式增补）。
+   *
+   * `copy_range` 要能“沿用现有格式”，而 `CellState` 不带样式：解析时顺手
+   * 把 cellXfs 归一化成 gateway 的样式形状，复制时一并下发。
+   */
+  formats: Map<string, Record<string, Record<string, unknown>>>
+  /** 合并区（工作表名 → `A2:C8` 列表），`copy_range` 一并偏移复制。 */
+  merges: Map<string, readonly string[]>
+  /** 行高（工作表名 → 行号 → px），复制时换算回磅一并下发。 */
+  heights: Map<string, Readonly<Record<string, number>>>
+}
+
+/**
+ * `CellStyle`（解析出的 OOXML 样式）→ gateway `WorkbookStyleEdit`（严格 schema）。
+ *
+ * 只映射两边都存在的属性：字体/填充/边框以外的主题色、富文本不在这里猜。
+ */
+function stylePatchOf(style: CellStyle | undefined): Record<string, unknown> | null {
+  if (!style) return null
+  const patch: Record<string, unknown> = {}
+  if (style.bold) patch.bold = true
+  if (style.italic) patch.italic = true
+  if (style.underline) patch.underline = true
+  if (style.fontFamily) patch.fontFamily = style.fontFamily
+  if (style.fontSize) patch.fontSize = style.fontSize
+  if (style.fontColor) patch.fontColor = style.fontColor
+  if (style.fillColor) patch.fillColor = style.fillColor
+  if (style.numberFormat) patch.numberFormat = style.numberFormat
+  if (style.align) patch.horizontalAlignment = style.align
+  if (style.vertical) patch.verticalAlignment = style.vertical
+  if (style.wrap) patch.wrapText = true
+  return Object.keys(patch).length > 0 ? patch : null
 }
 
 export class XlsxParseError extends Error {
@@ -41,7 +75,8 @@ export async function parseWorkbook(bytes: Uint8Array): Promise<WorkbookView> {
   try {
     // 页面 codec 与执行点共用同一份解析器：对命名空间前缀、非常规 rels
     // Target 更宽容，避免“有些表格打不开”。
-    const sheets: WorksheetState[] = parseSheetLikeWorkbook(bytes).map((sheet) => ({
+    const parsed = parseSheetLikeWorkbook(bytes)
+    const sheets: WorksheetState[] = parsed.map((sheet) => ({
       id: sheet.id,
       name: sheet.name,
       cells: Object.fromEntries(
@@ -57,11 +92,35 @@ export async function parseWorkbook(bytes: Uint8Array): Promise<WorkbookView> {
     if (sheets.length === 0) throw new Error('no readable worksheets')
     const sheetNamesById = Object.fromEntries(sheets.map((sheet) => [sheet.id, sheet.name]))
     const snapshot = { revision: 0, sheets }
+    const formats = new Map<string, Record<string, Record<string, unknown>>>()
+    const merges = new Map<string, readonly string[]>()
+    const heights = new Map<string, Readonly<Record<string, number>>>()
+    for (const sheet of parsed) {
+      const map: Record<string, Record<string, unknown>> = {}
+      // `formats` 覆盖“空值但带样式”的填充格（cells 里没有它们）。
+      const styled = sheet.formats ?? {}
+      for (const [address, style] of Object.entries(styled)) {
+        const patch = stylePatchOf(style)
+        if (patch) map[address] = patch
+      }
+      for (const [address, cell] of Object.entries(sheet.cells)) {
+        if (map[address]) continue
+        const patch = stylePatchOf(cell.style)
+        if (patch) map[address] = patch
+      }
+      formats.set(sheet.name, map)
+      if (sheet.merges?.length) merges.set(sheet.name, sheet.merges)
+      if (sheet.rowHeights && Object.keys(sheet.rowHeights).length > 0)
+        heights.set(sheet.name, sheet.rowHeights)
+    }
     return {
       snapshot,
       sheetNamesById,
       sheets,
       byName: new Map(sheets.map((sheet) => [sheet.name, sheet])),
+      formats,
+      merges,
+      heights,
     }
   } catch (parseError) {
     try {
@@ -72,6 +131,10 @@ export async function parseWorkbook(bytes: Uint8Array): Promise<WorkbookView> {
         sheetNamesById: imported.sheetNamesById,
         sheets: [...imported.snapshot.sheets],
         byName,
+        // gateway 回退路径没有样式/合并投影：copy_range 只能复制值（已在 summary 里说明）。
+        formats: new Map(),
+        merges: new Map(),
+        heights: new Map(),
       }
     } catch (gatewayError) {
       throw new XlsxParseError(

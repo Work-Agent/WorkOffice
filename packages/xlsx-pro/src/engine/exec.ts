@@ -454,7 +454,15 @@ async function saveViaWasm(
     })
     const bytes = new Uint8Array(await readFile(join(engine.tempDir, targetName)))
     guardOutput(bytes, ctx)
-    return { bytes, drifted: driftedEntries(baseline, bytes, plan.touchedEntries) }
+    // 被删掉的条目（`delete_sheet` 的 worksheet part）本来就应当从包里消失；
+    // 不把它们算进“涉及条目”，I1 漂移检查会把删除误判成“保存改了无关的 ZIP 条目”。
+    return {
+      bytes,
+      drifted: driftedEntries(baseline, bytes, [
+        ...plan.touchedEntries,
+        ...plan.removedEntries,
+      ]),
+    }
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error) throw error
     throw coded('command.invalid', `wasm save_archive 失败：${messageOf(error)}`)

@@ -40,12 +40,14 @@ export interface AgentContextRequest {
   txnId: string
   version?: string
   epoch?: number
+  /** kind:'read' 的工具名（宿主透传）：页面用它判断这个读是不是自己的事 */
+  tool?: string
   /** apply 的新鲜度令牌（按 op 分级校验，见 shared/op-tiers） */
   docRev?: number
   structureEpoch?: number
-  /** kind:'read' 的读请求 */
+  /** kind:'read' 的读请求；页面只实现它真能回答的那几种，其余回 unsupported。 */
   read?: {
-    what: 'sheets' | 'range' | 'formulas' | 'find' | 'audit'
+    what: 'context' | 'meta' | 'sheets' | 'range' | 'formulas' | 'find' | 'audit' | string
     sheet?: string
     range?: string
     start?: string

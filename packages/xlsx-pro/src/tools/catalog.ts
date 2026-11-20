@@ -145,7 +145,7 @@ const cellOps: OpSpec[] = [
     op: 'copy_range',
     group: 'cells',
     headless: true,
-    summary: '复制一块区域到目标位置（公式相对引用会偏移）',
+    summary: '复制一块区域到目标位置：值/公式 + 样式 + 合并区 + 行高（公式相对引用会偏移）',
     schema: {
       type: 'object',
       required: ['op', 'sheet', 'source', 'target'],
@@ -157,7 +157,7 @@ const cellOps: OpSpec[] = [
     op: 'move_range',
     group: 'cells',
     headless: true,
-    summary: '剪切一块区域到目标位置并清空源区域',
+    summary: '剪切一块区域到目标位置并清空源区域（样式/合并/行高跟着走）',
     schema: {
       type: 'object',
       required: ['op', 'sheet', 'source', 'target'],

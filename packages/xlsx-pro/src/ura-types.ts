@@ -279,6 +279,8 @@ export interface CellStyle {
   fontSize?: number
   fontFamily?: string
   align?: 'left' | 'center' | 'right'
+  /** 垂直对齐（`copy_range` 沿用格式时要带上） */
+  vertical?: 'top' | 'center' | 'bottom'
   wrap?: boolean
   numberFormat?: string
 }
@@ -299,6 +301,11 @@ export interface SheetLike {
   gridRows?: number
   gridColumns?: number
   styles?: Readonly<Record<string, unknown>>
+  /**
+   * 每个**有显式样式**的地址（含空值单元格）。
+   * `cells` 只保存有值的格子，空但带样式的填充格在这里才能找回来。
+   */
+  formats?: Readonly<Record<string, CellStyle>>
   /** 合并区域，A1:C1 形式。 */
   merges?: readonly string[]
   /** 列宽（px，按 A/B/C 键）。 */

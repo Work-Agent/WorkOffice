@@ -13,6 +13,8 @@ const guide: ToolDecl = {
   label: 'Excel 命令目录',
   kinds: KINDS,
   readOnly: true,
+  // 命令目录是静态的：不依赖页面 live 模型，不能因“页面开着”而占用一次往返。
+  pageRead: false,
   description:
     '取 .xlsx 的命令词汇。无参：四组 op 名与数量；group：该组全部 schema；op：单条 schema 与示例。' +
     'cells / structure / sheets 无页面可执行；objects（图表/表格/透视表/条件格式等）需要打开页面。' +
@@ -37,7 +39,8 @@ const read: ToolDecl = {
   description:
     '读工作簿：概览与工作表清单（context）、工作表内容预览（sheets）、区域值（range）、' +
     '公式列表（formulas）、查找（find）、包结构诊断（audit）。只读，不产字节。' +
-    '有页面时读页面 live 模型（含未保存修改）；无页面时读落盘字节。',
+    '有页面时读页面 live 模型（含未保存修改）；无页面时读落盘字节（含未保存修改的页面只能读页面）。' +
+    '首行回带基线令牌：无页面只有 version，有页面还有 epoch / docRev / structureEpoch。',
   parameters: {
     type: 'object',
     properties: {
@@ -121,15 +124,25 @@ const apply: ToolDecl = {
       },
       version: {
         type: 'string',
-        description: '无页面写必填；有页面时由页面会话持有，可省略',
+        description: '无页面写必填；有页面时由页面会话持有，可省略（读结果首行的 version）',
+      },
+      structureEpoch: {
+        type: 'number',
+        description:
+          '读结果首行的 structureEpoch；含 A1 坐标 / 结构类命令在页面存在时必校验（宿主会自动透传）',
+      },
+      docRev: {
+        type: 'number',
+        description:
+          '读结果首行的 docRev；内容型命令（fill/copy/sort/find）在页面存在时必校验（宿主会自动透传）',
       },
       epoch: {
         type: 'number',
-        description: 'agent 读到的基线代数；位置型命令在页面存在时用于 stale-index 判定',
+        description: 'structureEpoch 的旧名（兼容；优先用 structureEpoch）',
       },
       revision: {
         type: 'number',
-        description: '页面内 Univer revision；页面代理用它判断读到的是不是同一份内容',
+        description: 'docRev 的旧名（兼容；优先用 docRev）',
       },
       dryRun: { type: 'boolean', description: '只校验，不落盘' },
     },

@@ -164,6 +164,7 @@ function copyBlock(
   targetStartRow: number,
   targetStartColumn: number,
   readCell: (sheetName: string, address: string) => CellState,
+  readStyle: (sheetName: string, address: string) => Record<string, unknown> | undefined,
   sourceSheetName = sheetName,
 ): number {
   let count = 0
@@ -177,11 +178,66 @@ function copyBlock(
       const next: CellState = cell.formula
         ? { value: null, formula: offsetFormulaRefs(cell.formula, targetRow - row, targetColumn - column) }
         : { value: cell.value }
-      request.edits.push(cellEdit(sheetName, targetAddress, next))
+      // 样式跟着单元格走：以前只拷值，”按现有格式补一块“只能靠手猜 format_range。
+      request.edits.push(cellEdit(sheetName, targetAddress, next, readStyle(sourceSheetName, address)))
       count += 1
     }
   }
   checkExpand(count, 'copy_range')
+  return count
+}
+
+/**
+ * `copy_range` / `move_range` 的附带结构：合并区与行高。
+ *
+ * 只复制**完全落在源区域内**的合并区（一个沾到边界的合并区复制过去只会变成
+ * 半个合并，宁可不要）；行高按源行对应行逐行下发。
+ */
+function copyDecorations(
+  request: XlsxSaveRequest,
+  view: WorkbookView,
+  sheetName: string,
+  source: RangeBounds,
+  targetStartRow: number,
+  targetStartColumn: number,
+  sourceSheetName: string,
+): number {
+  let count = 0
+  const rowOffset = targetStartRow - source.startRow
+  const columnOffset = targetStartColumn - source.startColumn
+  for (const ref of view.merges.get(sourceSheetName) ?? []) {
+    let area: RangeBounds
+    try {
+      area = parseRange(ref)
+    } catch {
+      continue
+    }
+    const inside =
+      area.startRow >= source.startRow &&
+      area.endRow <= source.endRow &&
+      area.startColumn >= source.startColumn &&
+      area.endColumn <= source.endColumn
+    if (!inside) continue
+    const moved =
+      `${formatAddress(area.startRow + rowOffset, area.startColumn + columnOffset)}:` +
+      `${formatAddress(area.endRow + rowOffset, area.endColumn + columnOffset)}`
+    addStructural(request, sheetName, { kind: 'merge-cells', range: areaOf(parseRange(moved)) })
+    count += 1
+  }
+  const heights = view.heights.get(sourceSheetName) ?? {}
+  for (let row = source.startRow; row <= source.endRow; row += 1) {
+    const px = heights[String(row + 1)]
+    if (px === undefined) continue
+    const target = targetStartRow + (row - source.startRow)
+    addStructural(request, sheetName, {
+      kind: 'set-row-size',
+      start: target,
+      end: target,
+      // 解析侧存的是 px（1px = 0.75pt）；结构命令要磅。
+      size: Math.round((px * 72) / 96),
+    })
+    count += 1
+  }
   return count
 }
 
@@ -214,6 +270,11 @@ export function buildSaveRequest(view: WorkbookView, operations: readonly Workbo
     if (addedSheets.has(sheetName)) return { value: null }
     return sheetOf(view, sheetName).cells[address] ?? { value: null }
   }
+
+  const readStyle = (
+    sheetName: string,
+    address: string,
+  ): Record<string, unknown> | undefined => view.formats.get(sheetName)?.[address]
 
   const writeCell = (
     sheetName: string,
@@ -423,8 +484,11 @@ export function buildSaveRequest(view: WorkbookView, operations: readonly Workbo
         const source = parseRange(operation.source)
         const targetText = operation.target.includes(':') ? operation.target.split(':')[0]! : operation.target
         const target = parseAddress(targetText)
+        const sourceSheet = operation.sourceSheetId ?? operation.sheetId
         checkRangeSize(source, 'copy_range')
-        edited += copyBlock(request, operation.sheetId, source, target.row, target.column, readCell, operation.sourceSheetId ?? operation.sheetId)
+        edited += copyBlock(request, operation.sheetId, source, target.row, target.column, readCell, readStyle, sourceSheet)
+        if (sourceSheet === operation.sheetId)
+          edited += copyDecorations(request, view, operation.sheetId, source, target.row, target.column, sourceSheet)
         break
       }
       case 'move_range': {
@@ -440,7 +504,10 @@ export function buildSaveRequest(view: WorkbookView, operations: readonly Workbo
           target.column <= source.endColumn &&
           target.column + sourceCols - 1 >= source.startColumn
         if (overlap) unsupported('move_range 的源区域与目标区域重叠；请拆成 copy_range + clear_range')
-        edited += copyBlock(request, operation.sheetId, source, target.row, target.column, readCell, operation.sourceSheetId ?? operation.sheetId)
+        const sourceSheet = operation.sourceSheetId ?? operation.sheetId
+        edited += copyBlock(request, operation.sheetId, source, target.row, target.column, readCell, readStyle, sourceSheet)
+        if (sourceSheet === operation.sheetId)
+          edited += copyDecorations(request, view, operation.sheetId, source, target.row, target.column, sourceSheet)
         const clearSheet = operation.sourceSheetId ?? operation.sheetId
         for (let row = source.startRow; row <= source.endRow; row += 1) {
           for (let column = source.startColumn; column <= source.endColumn; column += 1) {

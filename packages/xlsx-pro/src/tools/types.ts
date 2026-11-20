@@ -10,6 +10,8 @@ export interface ToolDecl {
   tokens?: 'docRev' | 'docRev+epoch' | 'docRev+structureEpoch'
   parameters: unknown
   plan?: string
+  /** 该只读工具是否必须进页面会话（缺省 = 是）；静态目录标 false。 */
+  pageRead?: boolean
   maxItems?: number
 }
 

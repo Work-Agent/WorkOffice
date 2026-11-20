@@ -64,3 +64,36 @@ export function tokenNeeds(ops: Iterable<unknown>): OpTokenNeeds {
   }
   return { docRev, structureEpoch }
 }
+
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+/**
+ * 一批命令实际可用的令牌：消息顶层（宿主透传）→ 命令入参（旧名兼容）。
+ *
+ * 校验点只认 `docRev` / `structureEpoch`，而工具入参历史上叫 `revision` /
+ * `epoch`。两边名字对不上时，含 A1 坐标的批次会 100% 被 `command.stale-index`
+ * 拒掉（"必须带上读到上下文时的 structureEpoch"），所以在这里显式归一。
+ */
+export function resolveTokens(sources: {
+  readonly message?: { readonly docRev?: number; readonly structureEpoch?: number }
+  readonly commands?: Iterable<unknown>
+}): { docRev?: number; structureEpoch?: number } {
+  let docRev = asNumber(sources.message?.docRev)
+  let structureEpoch = asNumber(sources.message?.structureEpoch)
+  for (const entry of sources.commands ?? []) {
+    if (docRev !== undefined && structureEpoch !== undefined) break
+    // 写批命令的形状是 { tool, params: { …, epoch / revision / docRev / structureEpoch } }。
+    const params = ((entry as { params?: unknown } | null | undefined)?.params ?? entry) as
+      | Record<string, unknown>
+      | null
+      | undefined
+    if (!params || typeof params !== 'object') continue
+    docRev ??= asNumber(params['docRev']) ?? asNumber(params['revision'])
+    structureEpoch ??= asNumber(params['structureEpoch']) ?? asNumber(params['epoch'])
+  }
+  return {
+    ...(docRev === undefined ? {} : { docRev }),
+    ...(structureEpoch === undefined ? {} : { structureEpoch }),
+  }
+}
