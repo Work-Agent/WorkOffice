@@ -42,10 +42,15 @@ export function buildCreateOps(opened: OpenedPptx, spec: DeckSpec): CreateOps {
   const content: PptxOp[] = []
   const size = opened.deck.size
 
-  if (spec.size === '4:3') setup.push({ op: 'setSlideSize', cx: 9144000, cy: 6858000 })
-  else if (spec.size === '16:9') setup.push({ op: 'setSlideSize', cx: 12192000, cy: 6858000 })
-  else if (spec.size && typeof spec.size === 'object')
-    setup.push({ op: 'setSlideSize', cx: spec.size.cx, cy: spec.size.cy })
+  // setSlideSize 对“已经是这个尺寸”返回 false（op 会当成失败）；
+  // 新建时 16:9 正好是 seed 的尺寸，所以先比对再发。
+  const pushSize = (cx: number, cy: number): void => {
+    if (size.cx === cx && size.cy === cy) return
+    setup.push({ op: 'setSlideSize', cx, cy })
+  }
+  if (spec.size === '4:3') pushSize(9144000, 6858000)
+  else if (spec.size === '16:9') pushSize(12192000, 6858000)
+  else if (spec.size && typeof spec.size === 'object') pushSize(spec.size.cx, spec.size.cy)
 
   if (spec.theme) {
     setup.push({
@@ -59,7 +64,9 @@ export function buildCreateOps(opened: OpenedPptx, spec: DeckSpec): CreateOps {
 
   const slides = spec.slides.length > 0 ? spec.slides : [{}]
   for (const [index, slide] of slides.entries()) {
-    if (index > 0) setup.push({ op: 'addBlankSlide', target: { slide: index - 1 } })
+    // 批内坐标要按“批开始时的单页 seed”校验：用 index-1 会在第 3 页起越界。
+    // 新插入的空白页顺序无所谓（content 随后按最终索引写），统一插入到第 0 页之后。
+    if (index > 0) setup.push({ op: 'addBlankSlide', target: { slide: 0 } })
 
     if (slide.background)
       content.push({

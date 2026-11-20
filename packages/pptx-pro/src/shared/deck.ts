@@ -84,14 +84,20 @@ export function titleOfSlide(slide: Slide): string {
 }
 
 export function boxOfElement(el: SlideElement): ElementSummary['box'] {
-  const t = (el as unknown as { transform?: { x?: number; y?: number; cx?: number; cy?: number } })
-    .transform
-  if (!t) return undefined
+  // 引擎的几何在 transform.offset（EMU），rot 是 1/60000 度。
+  const t = (el as unknown as {
+    transform?: {
+      offset?: { x?: number; y?: number; cx?: number; cy?: number }
+      rot?: number
+    }
+  }).transform
+  const o = t?.offset
+  if (!o) return undefined
   return {
-    x: Number(t.x ?? 0),
-    y: Number(t.y ?? 0),
-    cx: Number(t.cx ?? 0),
-    cy: Number(t.cy ?? 0),
+    x: Number(o.x ?? 0),
+    y: Number(o.y ?? 0),
+    cx: Number(o.cx ?? 0),
+    cy: Number(o.cy ?? 0),
   }
 }
 
@@ -100,7 +106,7 @@ export function summarizeElement(el: SlideElement): ElementSummary {
     id: string
     type: string
     name?: string
-    transform?: { rotDeg?: number }
+    transform?: { rot?: number }
     cells?: unknown[]
     chart?: { kind?: string; title?: string }
     link?: unknown
@@ -116,7 +122,7 @@ export function summarizeElement(el: SlideElement): ElementSummary {
     type: anyEl.type,
     ...(anyEl.name ? { name: anyEl.name } : {}),
     ...(boxOfElement(el) ? { box: boxOfElement(el) } : {}),
-    ...(anyEl.transform?.rotDeg !== undefined ? { rotDeg: anyEl.transform.rotDeg } : {}),
+    ...(anyEl.transform?.rot ? { rotDeg: anyEl.transform.rot / 60_000 } : {}),
     ...(textOfElement(el) ? { text: textOfElement(el) } : {}),
     ...(table ? { table } : {}),
     ...(anyEl.chart

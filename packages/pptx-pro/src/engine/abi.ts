@@ -93,6 +93,8 @@ export type PptxProPlan =
       metaDirty?: boolean
     }
   | { kind: 'new'; spec: unknown; applied?: number; dryRun?: boolean }
+  /** 设计稿路径：pages → buildDeckPptx（形状/文本/图片），spec 已是解析结果。 */
+  | { kind: 'build'; deck: unknown; applied?: number; dryRun?: boolean }
   | { kind: 'reject'; applied?: number; rejected: Rejection[]; warnings?: string[] }
   | { kind: 'noop'; applied?: number }
 

@@ -35,6 +35,9 @@ import {
 import { buildRenderSlide, EMU_PER_PX_96, type RenderSlide } from '@genoffice/pptx-render'
 import { runTxn } from '@genoffice/pptx-ops'
 import { deckSummary, summarizeElement, summarizeSlide } from '../shared/deck'
+import { readMany } from '../shared/read'
+import { runCheck } from '../shared/check'
+import { guideText } from '../tools/catalog'
 import { PDFDocument } from 'pdf-lib'
 import { strToU8 } from 'fflate'
 
@@ -2661,6 +2664,29 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
   const applyAgentTxn = async (batches: any[][], dryRun = false) =>
     agentApply(batches, dryRun)
 
+  /** 页面 live 读投影：agent 的只读工具在有页面时必须读这里（含未保存修改）。 */
+  const readLive = (params: Record<string, unknown>) =>
+    readMany(opened, {
+      name: options.data.name,
+      version,
+      docRev: String(docRev),
+      epoch,
+      ...params,
+    })
+
+  /** 命令目录（与执行点同一份 catalog；不读字节）。 */
+  const guideLive = (params: Record<string, unknown>) =>
+    guideText({
+      ...(typeof params['group'] === 'string' ? { group: params['group'] } : {}),
+      ...(typeof params['op'] === 'string' ? { op: params['op'] } : {}),
+      version,
+      epoch,
+    })
+
+  /** 设计稿检查：审计 / 骨架读活的模型（含未保存修改）。 */
+  const checkLive = (params: Record<string, unknown>) =>
+    runCheck(params, async () => opened)
+
   ;(window as any).__pptxProHost = {
     getVersion: () => version,
     getEpoch: () => epoch,
@@ -2671,6 +2697,9 @@ export async function installWorkStudioSlidesHost(options: HostOptions): Promise
       origin = next
     },
     context,
+    read: readLive,
+    guide: guideLive,
+    check: checkLive,
     applyAgentTxn,
     save,
     undo: async () => undoModel(),

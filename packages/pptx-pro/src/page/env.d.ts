@@ -65,10 +65,14 @@ export interface PageCommitInput {
 export interface AgentContextRequest {
   type: 'agent-request'
   id: string
-  kind: 'context' | 'apply'
+  kind: 'context' | 'read' | 'apply'
   txnId: string
   version?: string
   epoch?: number
+  /** kind:'read' 的工具名（宿主透传）；缺省时按参数形状判断。 */
+  tool?: string
+  /** kind:'read' 的读请求 */
+  read?: Record<string, unknown>
   commands?: unknown[]
   dryRun?: boolean
 }
@@ -126,6 +130,12 @@ export interface PptxProHost {
   getBytes(): Uint8Array
   setOrigin(origin: 'page' | 'agent'): void
   context(): unknown
+  /** 页面 live 读投影（pptx_read 语义，与执行点同源）。 */
+  read(params: Record<string, unknown>): unknown
+  /** 命令目录（pptx_guide，不依赖文档内容）。 */
+  guide(params: Record<string, unknown>): string
+  /** 设计稿检查（pptx_check：审计 / 骨架读活模型，outline / pages 对账不看文档）。 */
+  check(params: Record<string, unknown>): Promise<string>
   applyAgentTxn(batches: unknown[][], dryRun?: boolean): Promise<{
     ok: boolean
     dryRun?: boolean

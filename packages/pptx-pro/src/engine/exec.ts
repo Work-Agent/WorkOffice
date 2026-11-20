@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto'
 import { strToU8 } from 'fflate'
 import { readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -22,6 +22,8 @@ import {
 } from '@genoffice/pptx-engine'
 import { runTxn } from '@genoffice/pptx-ops'
 import { buildCreateOps } from './create'
+import { buildDesignDeck, formatPageIssues, type DesignDeck } from './build'
+import { baseDirOfRef } from './images'
 import { coded, messageOf, type EngineCtx, type ExecOutcome, type ExecRequest, type PptxOp, type PptxProPlan } from './abi'
 import * as state from './state'
 import { normalizeSpec, type DeckSpec } from '../shared/spec'
@@ -68,6 +70,21 @@ async function artifactOf(
 
 function syncVersion(): { kind: 'version' } {
   return { kind: 'version' }
+}
+
+/** 设计稿路径的字节已经就绪，直接写临时文件（不走 savePptxToFile）。 */
+async function artifactFromBytes(
+  bytes: Uint8Array,
+  ctx: EngineCtx,
+): Promise<{ artifact: NonNullable<ExecOutcome['artifact']>; sha256: string }> {
+  guardSize(bytes.byteLength, ctx)
+  const tempPath = join(
+    ctx.tempDir || tmpdir(),
+    `pptx-pro-${Date.now()}-${Math.random().toString(16).slice(2)}.pptx`,
+  )
+  await writeFile(tempPath, bytes)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  return { artifact: { tempPath, size: bytes.byteLength, sha256 }, sha256 }
 }
 
 export async function exec(req: ExecRequest, ctx: EngineCtx): Promise<ExecOutcome> {
@@ -117,6 +134,7 @@ export async function exec(req: ExecRequest, ctx: EngineCtx): Promise<ExecOutcom
     }
 
   if (plan.kind === 'new') return execNew(req, plan.spec, ctx)
+  if (plan.kind === 'build') return execBuild(req, plan.deck as DesignDeck, ctx)
 
   if (plan.kind === 'pageSave') {
     const bytes = req.bytes ?? (await ctx.readBytes()).bytes
@@ -320,6 +338,45 @@ async function execNew(req: ExecRequest, specInput: unknown, ctx: EngineCtx): Pr
     artifact: saved.artifact,
     modelToken: token,
     result: { applied: total, sync: syncVersion() },
+  }
+}
+
+/** 设计稿路径：页面 spec → 字节。图片下载失败只降级该图，不阻断整份 deck。 */
+async function execBuild(req: ExecRequest, deck: DesignDeck, ctx: EngineCtx): Promise<ExecOutcome> {
+  if (req.dryRun)
+    return {
+      result: {
+        applied: 0,
+        audit: {
+          mode: 'design',
+          pages: deck.spec.pages.length,
+          issues: formatPageIssues(deck.issues),
+        },
+        sync: { kind: 'none' },
+      },
+    }
+
+  // 相对图片路径按 deck 所在目录解析（`./assets/hero.png`）。
+  const baseDir = baseDirOfRef(req.ref)
+  const built = await buildDesignDeck(deck, {
+    ...(ctx.signal ? { signal: ctx.signal } : {}),
+    ...(baseDir ? { baseDir } : {}),
+  })
+  const saved = await artifactFromBytes(built.bytes, ctx)
+  const warnings = [
+    ...formatPageIssues(built.issues),
+    ...built.imageFailures.map((f) => `page ${f.page}: 图片取不到，已跳过 — ${f.url}`),
+    ...built.imageWarnings.map((w) => `page ${w.page}: ${w.message}`),
+  ]
+  const token = `pptx-pro-new-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return {
+    artifact: saved.artifact,
+    modelToken: token,
+    result: {
+      applied: built.pages,
+      ...(warnings.length > 0 ? { warnings: warnings.slice(0, 50) } : {}),
+      sync: syncVersion(),
+    },
   }
 }
 

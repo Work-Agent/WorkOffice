@@ -64,11 +64,11 @@ for (const decl of tools ?? []) {
   if (seen.has(decl?.name)) fail(`工具名重复：${at}`)
   seen.add(decl?.name)
 }
-for (const name of ['pptx_guide', 'pptx_read', 'pptx_create', 'pptx_apply'])
-  if (!seen.has(name)) fail(`四工具面缺少 ${name}`)
-if (seen.size !== 4) fail(`四工具面应只有 4 条声明（实际 ${seen.size}）`)
-if ((tools ?? []).filter((d) => d.readOnly).length !== 2) fail('四工具面应恰好 2 个只读工具')
-if ((tools ?? []).filter((d) => !d.readOnly).length !== 2) fail('四工具面应恰好 2 个写工具')
+for (const name of ['pptx_guide', 'pptx_read', 'pptx_check', 'pptx_create', 'pptx_apply'])
+  if (!seen.has(name)) fail(`工具面缺少 ${name}`)
+if (seen.size !== 5) fail(`工具面应只有 5 条声明（实际 ${seen.size}）`)
+if ((tools ?? []).filter((d) => d.readOnly).length !== 3) fail('工具面应恰好 3 个只读工具')
+if ((tools ?? []).filter((d) => !d.readOnly).length !== 2) fail('工具面应恰好 2 个写工具')
 
 const planMod = await load(ws.engine.plan)
 const execMod = await load(ws.engine.exec)
@@ -209,6 +209,84 @@ else {
     if (!xml.includes('年度汇报')) fail('新建第一页缺少标题')
   }
 }
+
+// 设计稿路径：pages spec → build → pptx_check audit
+const DESIGN = [
+  {
+    background: '#0E1A2B',
+    elements: [
+      {
+        type: 'text',
+        x: 80,
+        y: 200,
+        w: 900,
+        h: 140,
+        paragraphs: [
+          { runs: [{ text: 'Verify deck', sizePt: 54, bold: true, color: '#FFFFFF' }] },
+        ],
+      },
+      { type: 'shape', shape: 'rect', x: 80, y: 400, w: 300, h: 8, fill: '#FFB000' },
+    ],
+  },
+]
+const designPlan = await planMod.plan(
+  { tool: 'pptx_create', params: { pages: DESIGN }, ref: 'verify://design.pptx', missing: true },
+  ctxFor(new Uint8Array()),
+)
+if (designPlan?.plan?.kind !== 'build')
+  fail(`pptx_create pages 应产出 build 计划（当前 ${designPlan?.plan?.kind}）`)
+else {
+  const designOut = await execMod.exec(
+    { ref: 'verify://design.pptx', baseVersion: '', plan: designPlan.plan, missing: true },
+    ctxFor(new Uint8Array()),
+  )
+  if (!designOut?.artifact?.tempPath) fail('设计稿新建没有产出 artifact')
+  else {
+    const bytes = new Uint8Array(await readFile(designOut.artifact.tempPath))
+    const files = unzipSync(bytes)
+    const xml = strFromU8(files['ppt/slides/slide1.xml'])
+    if (!xml.includes('Verify deck')) fail('设计稿第一页缺少文本')
+    if (!/<a:prstGeom prst="rect"/.test(xml)) fail('设计稿缺少形状元素')
+    if (!xml.includes('<p:bg>')) fail('设计稿背景未被提升成原生背景')
+    const audit = await planMod.plan(
+      { tool: 'pptx_check', params: { audit: true }, ref: 'verify://design.pptx', bytes },
+      ctxFor(bytes),
+    )
+    if (!/几何审计/.test(audit?.summary ?? '')) fail('pptx_check audit 没有返回几何审计')
+  }
+}
+
+const outlineCheck = await planMod.plan(
+  {
+    tool: 'pptx_check',
+    params: {
+      outline: {
+        core_hook: 'x',
+        pages: [
+          {
+            title: 'A',
+            type: 'content',
+            layout: 'three_column_cards',
+            brief: 'a'.repeat(60),
+            image_queries: [],
+          },
+          {
+            title: 'B',
+            type: 'content',
+            layout: 'three_column_cards',
+            brief: 'b'.repeat(60),
+            image_queries: [],
+          },
+        ],
+      },
+    },
+    ref: 'verify://new.pptx',
+    missing: true,
+  },
+  ctxFor(new Uint8Array()),
+)
+if (!/repeats the previous page/.test(outlineCheck?.summary ?? ''))
+  fail('pptx_check 没有报连续同版式')
 
 for (const message of warnings) console.warn(`warn  ${message}`)
 if (problems.length > 0) {

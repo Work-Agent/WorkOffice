@@ -9,6 +9,8 @@ import { guideText, isKnownOp, isPageOnly } from '../tools/catalog'
 import { normalizeOps, type PptxOp } from '../shared/ops'
 import { DeckSpecError, normalizeSpec } from '../shared/spec'
 import { coded, messageOf, type EngineCtx, type PlanOutcome, type PlanRequest, type Rejection } from './abi'
+import { parseDesignDeck, formatPageIssues } from './build'
+import { check, type CheckParams } from './check'
 import { getOrOpen, sha256Hex } from './state'
 import * as read from './read'
 
@@ -43,9 +45,37 @@ export async function plan(req: PlanRequest, ctx: EngineCtx): Promise<PlanOutcom
     }
   }
 
+  if (tool === 'pptx_check' || tool === 'pptx.check') {
+    const bytes = req.missing ? undefined : (req.bytes ?? (await ctx.readBytes()).bytes)
+    try {
+      return { plan: { kind: 'noop' }, summary: await check(req.ref, params as CheckParams, bytes) }
+    } catch (error) {
+      if ((error as { code?: string }).code) throw error
+      throw coded('command.invalid', messageOf(error))
+    }
+  }
+
   if (tool === 'pptx_create' || tool === 'pptx.create') {
     if (!req.missing)
       return reject(0, 'resource.exists', '目标已存在；修改已有演示文稿请用 pptx_apply')
+    // 设计稿路径：pages（1280×720 px 的元素数组）→ buildDeckPptx。
+    if (params['pages'] !== undefined) {
+      try {
+        const deck = parseDesignDeck(params['pages'], params['style'])
+        const issues = formatPageIssues(deck.issues)
+        return {
+          plan: { kind: 'build', deck, applied: deck.spec.pages.length },
+          summary: [
+            `create: ${req.ref} pages=${deck.spec.pages.length}（设计稿）`,
+            ...deck.notes.slice(0, 10),
+            ...issues.slice(0, 20),
+          ].join('\n'),
+        }
+      } catch (error) {
+        if ((error as { code?: string }).code) throw error
+        return reject(0, 'command.invalid', messageOf(error))
+      }
+    }
     try {
       const spec = normalizeSpec(params)
       return {

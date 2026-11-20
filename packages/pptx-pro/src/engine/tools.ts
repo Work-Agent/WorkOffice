@@ -1,6 +1,6 @@
 // ─── engine.tools：主进程只声明（不导出执行函数） ──────────────────────
 //
-// 4 个工具：一张目录 + 一个读 + 一个新建 + 一个批量写。
+// 5 个工具：目录 + 读 + 检查 + 新建 + 批量写。
 // 目录里的 63 条命令（上游 62 条 AI 可调用 + editChart）按需用 pptx_guide 取。
 
 import type { ToolDecl } from '../tools/types'
@@ -62,16 +62,83 @@ const create: ToolDecl = {
   readOnly: false,
   requiresBaseVersion: false,
   description:
-    '从零新建 .pptx。ref 是尚不存在的目标资源 id；slides 是 [{title,body?,bullets?,notes?,background?}]，' +
-    '也可以用 Markdown content（# 页标题、--- 分页、- 项目符号、notes: 备注）。' +
+    '从零新建 .pptx。ref 是尚不存在的目标资源 id。两条路径：\n' +
+    '① 设计稿（推荐）：pages 是页面数组。每页写「版式 + 内容」即可 —— ' +
+    '{layout, type?, title, kicker?, subtitle?, items?:[{title?,value?,note?,bullet?}], body?, footnote?, image?}，' +
+    '坐标由引擎按版式算（共 16 种版式：cover_* / three_column_cards / kpi_cards_row / hero_big_number / ' +
+    'two_column_comparison / two_by_two_grid / timeline_horizontal / left_text_right_image / title_and_bullets / closing_*）；' +
+    '不写 layout 会按内容自动挑。需要精确控制时改用 {background?, elements:[…]}（1280×720 px，text/shape/image 三种元素）。' +
+    'pptx_check({styles:true}) 列出风格预设，pptx_create({style:"consulting-navy"}) 一行换皮。\n' +
+    '② 文字稿（快但素）：slides 是 [{title,body?,bullets?,notes?,background?}]，或 Markdown content。\n' +
     '空内容 = 空白演示文稿。目标已存在时拒绝；修改已有演示文稿请用 pptx_apply。',
   parameters: {
     type: 'object',
     properties: {
       ref: REF,
+      pages: {
+        type: 'array',
+        description:
+          '设计稿页面数组。每页写「版式 + 内容」（layout + title/items/body…），坐标由引擎算；' +
+          '也可以给 {background?,elements:[…]} 直接摆 px 元素',
+        items: {
+          type: 'object',
+          properties: {
+            layout: {
+              type: 'string',
+              description:
+                '版式名。cover_typography_hero / cover_dark_minimal / cover_split_color / cover_magazine / ' +
+                'cover_split_image / cover_full_image_overlay / three_column_cards / kpi_cards_row / ' +
+                'hero_big_number / two_column_comparison / two_by_two_grid / timeline_horizontal / ' +
+                'left_text_right_image / full_image_text_overlay / title_and_bullets / closing_thank_you / closing_cta；' +
+                '不写则按内容自动挑',
+            },
+            type: { type: 'string', enum: ['cover', 'content', 'data', 'closing'] },
+            title: { type: 'string' },
+            kicker: { type: 'string', description: '眉标：章节号 / 分类 / 日期，小字在标题上方' },
+            subtitle: { type: 'string' },
+            items: {
+              type: 'array',
+              description: '卡片 / 数字 / 节点的内容；数量决定栏数（3 项 → 三栏）',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', description: '卡片标题' },
+                  value: { type: 'string', description: '大数字 / 关键值，如 +31%' },
+                  note: { type: 'string', description: '说明；可多行（\n）' },
+                  bullet: { type: 'string' },
+                },
+              },
+            },
+            body: {
+              oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+              description: '项目符号正文；每项一条',
+            },
+            footnote: { type: 'string', description: '来源 / 备注，放页面底部' },
+            image: {
+              type: 'string',
+              description: '图片：http(s) / file:// / 相对 deck 目录的路径 / data: URL',
+            },
+            imageCaption: { type: 'string' },
+            background: { type: 'string', description: '#RRGGBB 或 #RRGGBBAA（不给按版式定）' },
+            style: { type: 'string', description: '本页换一套预设（只影响这一页）' },
+            elements: {
+              type: 'array',
+              description: '低层：px 元素数组（给了就不再用 layout），先画的在底层',
+              items: { type: 'object' },
+            },
+          },
+        },
+      },
+      style: {
+        oneOf: [{ type: 'string' }, { type: 'object' }],
+        description:
+          '风格：预设 id（consulting-navy / tech-dark / editorial-warm / minimal-mono / fresh-teal / bold-red）、' +
+          '中文名，或 {preset, colors:{accent,bg,card,…}}；不传默认 consulting-navy。' +
+          'pptx_check({styles:true}) 可列出全部',
+      },
       slides: {
         type: 'array',
-        description: '页规格列表',
+        description: '文字稿页规格列表（只有标题 + 正文两段文字）',
         items: {
           type: 'object',
           properties: {
@@ -86,6 +153,44 @@ const create: ToolDecl = {
       content: { type: 'string', description: '轻量 Markdown' },
       theme: { type: 'object', description: 'applyTheme 的 {name,colors,majorFont?,minorFont?}' },
       size: { oneOf: [{ type: 'string', enum: ['16:9', '4:3'] }, { type: 'object' }] },
+    },
+    required: ['ref'],
+  },
+}
+
+const check: ToolDecl = {
+  name: 'pptx_check',
+  label: 'PPT 检查',
+  kinds: KINDS,
+  readOnly: true,
+  description:
+    '写之前/写之后查一遍，不产字节：\n' +
+    '① outline：核心 hook、每页 type+layout、占位符、版式重复（design.md 的硬规则）；\n' +
+    '② pages：逐页解析页面 spec，并和 outline 条目、style.md 调色板对账；\n' +
+    '③ 不给 outline/pages（或 audit:true）：对现有文件跑几何审计（越界/文字溢出/重叠/图片变形），每条附可直接套用的 setTransform；\n' +
+    '④ skeleton:true：抽出这张 deck 的可复用版面骨架（背景/标题框/品牌图槽/装饰），拄进 style.md 下次复用。',
+  parameters: {
+    type: 'object',
+    properties: {
+      ref: REF,
+      outline: {
+        oneOf: [{ type: 'object' }, { type: 'string' }],
+        description: 'outline 对象（或它的 JSON 文本）：{core_hook,pages:[{title,type,layout,brief,image_queries}]}',
+      },
+      pages: {
+        oneOf: [{ type: 'array' }, { type: 'object' }],
+        description: '页面 spec 数组（或 {pages:[…]}）；给了就和 outline/style 对账',
+      },
+      style: {
+        oneOf: [{ type: 'string' }, { type: 'object' }],
+        description:
+          '预设 id / {preset}/{colors}，或 style.md 的 Markdown 文本（解析 #RRGGBB 当调色板）。' +
+          '高层页面按预设上色；自定义 style.md 只做调色板检查',
+      },
+      styles: { type: 'boolean', description: '列出可用风格预设（按内容挑一个）' },
+      audit: { type: 'boolean', description: '对 ref 跑几何审计（默认在没给 outline/pages 时自动开）' },
+      skeleton: { type: 'boolean', description: '打印可复用版面骨架' },
+      slide: { type: 'integer', description: '只审某一页（0-based）' },
     },
     required: ['ref'],
   },
@@ -137,6 +242,6 @@ const apply: ToolDecl = {
   },
 }
 
-export const tools: ToolDecl[] = [guide, read, create, apply]
+export const tools: ToolDecl[] = [guide, read, check, create, apply]
 
 export default tools

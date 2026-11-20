@@ -81,6 +81,23 @@ async function handle(
     return { context: host.context() }
   }
 
+  // 只读工具进页面时读 live 模型（含未保存修改）；无页面时宿主走执行点。
+  if (request.kind === 'read') {
+    const tool = String(request.tool ?? '')
+    const read = (request.read ?? {}) as AnyRecord
+    const isGuide = tool === 'pptx_guide' || tool === 'pptx.guide'
+    // 命令目录不依赖文档内容：页面直接生成，不必回执行点重读整包。
+    if (isGuide || read['group'] !== undefined || read['op'] !== undefined)
+      return { context: host.guide(read) }
+    // pptx_check：审计 / 骨架读活模型；outline / pages 对账不需要文档。
+    if (tool === 'pptx_check' || tool === 'pptx.check') return { context: await host.check(read) }
+    // 旧宿主没传 tool：无 what 时无法区分 pptx_read（默认 context）与无参 guide，
+    // 宁可回执行点，也不要回错类型的答案。
+    if (!tool && read['what'] === undefined)
+      throw coded('command.unsupported', '旧宿主未提供工具名，无法区分读投影与命令目录')
+    return { context: host.read(read) }
+  }
+
   const commands = Array.isArray(request.commands) ? (request.commands as AnyRecord[]) : []
   if (commands.length === 0) throw coded('command.invalid', '缺少 commands')
 
