@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@work-studio/sdk": "file:../../../WorkStudio/packages/sdk",
+    "@work-studio/sdk": "^0.2.0",
     "esbuild": "^0.27.3",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
