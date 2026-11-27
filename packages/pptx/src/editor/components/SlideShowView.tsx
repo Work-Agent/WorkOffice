@@ -243,9 +243,13 @@ export function SlideShowView({
     // so it never lays out at the pre-snap size and re-jumps. On macOS HTML
     // fullscreen is skipped — it would only re-trigger the animated native
     // fullscreen. Stale preloads lack the API and keep the old animated behavior.
-    const snapped = window.slidesApi.setShowFullScreen?.(true) ?? Promise.resolve()
-    void snapped
-      .catch(() => {})
+    const snapped = Promise.resolve(window.slidesApi.setShowFullScreen?.(true)).catch(() => {})
+    // 宿主全屏 IPC / requestFullscreen 可能永远不 resolve；用 600ms 上限保证 show
+    // 一定会 reveal，而不是停在黑幕。
+    const snapDeadline = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 600)
+    })
+    void Promise.race([snapped, snapDeadline])
       .then(() => {
         if (!IS_MAC) void document.documentElement.requestFullscreen?.().catch(() => {})
         // Covered = the viewport spans the WHOLE screen, width and height (the

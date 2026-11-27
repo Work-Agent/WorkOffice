@@ -1,21 +1,39 @@
 // ─── GenOffice Docs 页面 ↔ WorkStudio 页面会话适配层 ─────────────────
 //
 // 这是两套交互模型的唯一接缝，不是 GenOffice 主进程的复制：
-//   GenOffice 打开 = 文件路径 → 这里 = page.get 的字节
-//   GenOffice 保存 = 写路径 → 这里 = ura.page.saveBytes（页面会话串行写）
+//   GenOffice 打开 = 文件路径 → 这里 = page.get / page.bytes 的字节
+//   GenOffice 保存 = 写路径 → 这里 = ura.page.commit（计划型写：
+//     payload.type='plan', plan={kind:'bytes'}，exec 是唯一字节产生者）
 //   GenOffice 对话框 / 菜单 → 这里 = 不承载，交给 WorkStudio 壳层
 //
-// 页面只持有语义化会话；路径、版本、写通道都不进入 GenOffice 的交互代码。
+// 与 packages/docx/page/host.ts 的唯一区别：写通道从 saveBytes 换成 commit，
+// 因此人写与 agent 写共用一条提交函数，version / epoch 永远同源。
 
-import type { PageCommitResult, PageSessionInfo } from './env'
+import { sha256Hex } from '../shared/sha256'
+import type { Receipt } from './env'
 
 export interface DocxHostInput {
-  sessionId: string
   ref: string
+  pageId: string
   name: string
   bytes: Uint8Array
   blobUrl: string
   hash: string
+  version: string
+  epoch: number
+  /** 提交回执（version / epoch / applied / rejected）；agent 桥用它回执。 */
+  onReceipt?: (receipt: Receipt) => void
+}
+
+export interface PageWriteState {
+  version: string
+  epoch: number
+  /** 当前已落盘 / 已加载的内容哈希（插件级 CAS 令牌）。 */
+  hash: string
+  /** 下一次提交的来源：agent 批次期间为 'agent'。 */
+  origin: 'page' | 'agent'
+  lastReceipt: Receipt | null
+  lastError: string | null
 }
 
 type Listener<T> = (value: T) => void
@@ -64,12 +82,13 @@ async function saveText(
   return { ok: true, path: defaultName }
 }
 
-export function installDocxHost(input: DocxHostInput): void {
-  const { ura, bus } = window.extension
+export function installDocxHost(input: DocxHostInput) {
+  const bridge = window.workStudio
+  // 旧版 bus 只承载主题 / dirty；新宿主由壳层负责，这里留空实现。
+  const bus = { send: (_message: unknown): void => {}, on: (_cb: (message: { type: string; [key: string]: unknown }) => void): (() => void) => () => {} }
   const themeListeners = new Set<Listener<'light' | 'dark'>>()
   const path = input.ref
   let pendingConsumed = false
-  let currentPath = path
 
   const theme = (): 'light' | 'dark' =>
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
@@ -100,22 +119,44 @@ export function installDocxHost(input: DocxHostInput): void {
     true,
   )
 
-  async function save(data: ArrayBuffer): Promise<{ ok: boolean; error?: string }> {
+  const write: PageWriteState = {
+    version: input.version,
+    epoch: input.epoch,
+    hash: input.hash,
+    origin: 'page',
+    lastReceipt: null,
+    lastError: null,
+  }
+
+  async function commit(
+    data: ArrayBuffer,
+  ): Promise<{ ok: boolean; error?: string }> {
     try {
       const bytes = new Uint8Array(data)
-      const result = await ura.page.saveBytes<PageCommitResult>(input.sessionId, bytes)
-      if (result?.ok) {
-        bus.send({ type: 'dirty', dirty: false })
-        return { ok: true }
-      }
-      return { ok: false, error: '保存失败' }
+      if (bytes.byteLength === 0) return { ok: false, error: '序列化产出空字节' }
+      const result = await bridge.command<Receipt>('docx-pro', 'docx-pro', 'save', {
+        ref: input.ref,
+        pageId: input.pageId,
+        bytes,
+        baseHash: write.hash,
+        type: write.origin,
+      })
+      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+      const receipt = result.data
+      write.version = receipt.hash
+      write.epoch = 0
+      write.hash = receipt.hash
+      write.lastReceipt = receipt
+      write.lastError = null
+      input.onReceipt?.(receipt)
+      return { ok: true }
     } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
+      write.lastError = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: write.lastError }
     }
   }
+
+  const save = commit
 
   const base: Record<string, unknown> = {
     // 文档生命周期
@@ -140,20 +181,12 @@ export function installDocxHost(input: DocxHostInput): void {
     onOpenDocx: () => () => undefined,
     onRenamedDocx: () => () => undefined,
 
-    // 保存
-    saveDocx: async (_path: string, data: ArrayBuffer) => save(data),
-    saveDocxAs: async (_name: string, data: ArrayBuffer) => {
-      const result = await save(data)
-      return result.ok ? { ok: true, path: currentPath } : result
-    },
-    saveDocxNew: async (_name: string, data: ArrayBuffer) => {
-      const result = await save(data)
-      return result.ok ? { ok: true, path: currentPath } : result
-    },
-    saveDocxTo: async (_path: string, data: ArrayBuffer) => {
-      const result = await save(data)
-      return result.ok ? { ok: true, path: currentPath } : result
-    },
+    // 保存：全部走 commit（计划型写）
+    saveDocx: async (_path: string, data: ArrayBuffer) => commit(data),
+    // 另存为 / 新建属于宿主文件管理；插件不写非当前 ref，避免误覆盖当前文档。
+    saveDocxAs: async () => ({ ok: false, error: '另存为由宿主文件管理处理' }),
+    saveDocxNew: async () => ({ ok: false, error: '新建由宿主文件管理处理' }),
+    saveDocxTo: async () => ({ ok: false, error: '指定路径保存由宿主文件管理处理' }),
     writeRecoveryCopy: async () => ({ ok: true }),
     setDocPassword: async () => ({ ok: true }),
     docPasswordIntentRevision: async () => 0,
@@ -288,7 +321,22 @@ export function installDocxHost(input: DocxHostInput): void {
   // 只暴露 WorkStudio 页面会话承载的桌面语义；未实现项属于宿主 chrome，
   // 由壳层承担，不进入 GenOffice 页面。
   window.desktop = base as unknown as typeof window.desktop
+
+  return {
+    write,
+    /** agent 批次期间切换提交来源（页面 flush 用 'page'，agent 应用用 'agent'）。 */
+    setOrigin(origin: 'page' | 'agent') {
+      write.origin = origin
+    },
+    getVersion: () => write.version,
+    getEpoch: () => write.epoch,
+    getHash: () => write.hash,
+    lastReceipt: () => write.lastReceipt,
+    lastError: () => write.lastError,
+  }
 }
+
+export type DocxHost = ReturnType<typeof installDocxHost>
 
 export function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64)
@@ -298,22 +346,5 @@ export function base64ToBytes(base64: string): Uint8Array {
 }
 
 export function hashOf(bytes: Uint8Array): string {
-  let hash = 2166136261
-  for (let i = 0; i < bytes.length; i++) {
-    hash ^= bytes[i]!
-    hash = Math.imul(hash, 16777619)
-  }
-  return `ws-${(hash >>> 0).toString(16)}`
-}
-
-export function docxInfoOf(info: PageSessionInfo): {
-  bytes: Uint8Array
-  name: string
-} {
-  const data = info.data as { bytes?: string; name?: string } | null
-  if (!data?.bytes) throw new Error('DOCX 页面数据缺少字节内容')
-  return {
-    bytes: base64ToBytes(data.bytes),
-    name: data.name || 'document.docx',
-  }
+  return sha256Hex(bytes)
 }

@@ -23,6 +23,7 @@ import { splitSheetRef } from '@genoffice/xlsx-gateway/domain/chart-visual'
 import { CHART_CATEGORY_WIRE_MAX, CHART_TEXT_WIRE_MAX } from '../shared/desktop-api'
 import { ADDABLE_SHAPE_TYPES } from '@genoffice/xlsx-gateway/shared/shape-types'
 import { INDENT_STEP_PX } from './selection-format'
+import { bumpStructureEpoch } from './page-tokens'
 import type { SharedFormulaResolver } from './shared-formula-journal'
 import type { SheetProtectionInfo } from './sheet-protection'
 
@@ -458,7 +459,24 @@ export function recordFilterChange(journal: EditJournal, sheetId: string): void 
   journal.filterDirty.add(sheetId)
 }
 
+/// Moves cell coordinates. Merges are included: they do not shift A1, but an
+/// agent batch that merged cells must still be re-validated after they changed.
+const COORDINATE_OPS: ReadonlySet<string> = new Set([
+  'insert-rows',
+  'remove-rows',
+  'insert-cols',
+  'remove-cols',
+  'move-rows',
+  'merge-cells',
+  'unmerge-cells',
+])
+
+function bumpFor(op: { readonly kind: string }): void {
+  if (COORDINATE_OPS.has(op.kind)) bumpStructureEpoch()
+}
+
 export function recordSheetInsert(journal: EditJournal, sheetId: string, name: string): void {
+  bumpStructureEpoch()
   // A re-insert of a previously removed sheet (undo of the removal) just
   // clears the mark; its journal entries were kept and stay valid.
   if (journal.sheets.removed.delete(sheetId)) return
@@ -466,6 +484,7 @@ export function recordSheetInsert(journal: EditJournal, sheetId: string, name: s
 }
 
 export function recordSheetRemove(journal: EditJournal, sheetId: string): void {
+  bumpStructureEpoch()
   journal.sheets.removed.add(sheetId)
 }
 
@@ -478,6 +497,7 @@ export function recordSheetDuplicate(
   name: string,
   sourceSheetId: string,
 ): void {
+  bumpStructureEpoch()
   if (journal.sheets.removed.delete(sheetId)) return
   journal.sheets.added.set(sheetId, { name, sourceSheetId })
   const sourceCells = journal.cells.get(sourceSheetId)
@@ -530,6 +550,7 @@ export function recordSheetRename(
   name: string,
   originalName: string | undefined,
 ): void {
+  bumpStructureEpoch()
   const added = journal.sheets.added.get(sheetId)
   if (added) {
     // Keep the duplicate provenance: dropping sourceSheetId here made a
@@ -547,6 +568,7 @@ export function isSheetRemoved(journal: EditJournal, sheetId: string): boolean {
 }
 
 export function recordSheetOrderChange(journal: EditJournal): void {
+  bumpStructureEpoch()
   journal.sheets.orderDirty = true
 }
 
@@ -1498,6 +1520,7 @@ export function removeStructuralOp(
   const index = ops.lastIndexOf(op)
   if (index === -1) return
   ops.splice(index, 1)
+  bumpFor(op)
   if (ops.length === 0) journal.structuralOps.delete(sheetId)
 }
 
@@ -1535,6 +1558,8 @@ export function recordStructuralOp(
   } else {
     ops.push(op)
     journal.structuralOps.set(sheetId, ops)
+    // 净变化才推进结构修订号：insert + 它的 undo 抵消时坐标回到原处。
+    bumpFor(op)
   }
 
   // Merges don't move cells; covered-cell clears arrive as value mutations.

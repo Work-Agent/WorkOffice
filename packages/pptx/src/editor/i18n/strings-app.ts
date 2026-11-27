@@ -44,7 +44,7 @@ export const appStrings = defineStrings({
   hi,
   'zh-TW': zhTW,
   vi,
-  // 上游新增 tr / hu：fork 未翻译，先映射到 en（宿主只切 zh，不可达）
+  // 上游新增 tr / hu：fork 未翻译，先映射到 en
   tr: en,
   hu: en,
 })

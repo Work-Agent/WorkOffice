@@ -16,12 +16,18 @@ import {
   LINE_KINDS,
   type HeaderFooter,
   type StyleInfo,
+  type StyleUpsert,
   type TextboxDisplay,
 } from '@genoffice/docx-engine'
 import type { DocsTabInfo } from '../../shared/ipc'
 import { runUiOps } from '../ai/ops'
 import { stepDocsZoom } from '../wheel-zoom'
-import { defaultParagraphStyleId, headingStyleId, type StyleMap } from '../style-gallery'
+import {
+  baselineStyleUpsert,
+  defaultParagraphStyleId,
+  headingStyleId,
+  type StyleMap,
+} from '../style-gallery'
 import { tableModelToPmNode } from '../editor/convert'
 import { insertPageBreak } from '../editor/page-break'
 import { insertPictureAtSelection } from '../editor/insert-picture'
@@ -271,7 +277,10 @@ export function applyParagraphStyleId(
 /**
  * Gallery / Styles pane click: a character style toggles on the selection (the
  * textbox sub-editor when one is active), a paragraph style goes on the
- * paragraphs. A fallback entry the document does not define sets the node type only.
+ * paragraphs. A baseline card the document does not define yet is materialized
+ * through `define` first (Word's latent styles work the same way), so the
+ * heading survives the save as a real w:pStyle instead of a bare paragraph.
+ * Returns an error message when the definition could not be queued.
  */
 export function applyGalleryStyle(
   editor: Editor,
@@ -279,16 +288,27 @@ export function applyGalleryStyle(
   info: StyleInfo,
   styles: StyleMap | undefined,
   activeCharStyleId: string | null,
-): void {
+  define?: (up: StyleUpsert) => string | null,
+): string | null {
   if (info.type === 'character') {
     const ed = sub ?? editor
     if (activeCharStyleId === info.styleId) ed.chain().focus().unsetMark('docTextStyle').run()
     else ed.chain().focus().setMark('docTextStyle', { styleId: info.styleId }).run()
-    return
+    return null
   }
-  if (sub) return
-  const styleId = styles?.has(info.styleId) ? info.styleId : null
+  if (sub) return null
+  let map = styles
+  if (!map?.has(info.styleId)) {
+    const def = baselineStyleUpsert(info, map)
+    if (def) {
+      const err = define?.(def)
+      if (err) return err
+      map = new Map(map ?? []).set(def.styleId, info)
+    }
+  }
+  const styleId = map?.has(info.styleId) ? info.styleId : null
   applyParagraphStyleId(editor, styleId, info.headingLevel ?? null)
+  return null
 }
 
 /** attrs of the paragraph-like node at the cursor */

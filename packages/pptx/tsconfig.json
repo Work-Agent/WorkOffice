@@ -28,6 +28,27 @@
       "@genoffice/i18n": [
         "../../vendor/genoffice/packages/i18n/src/index.ts"
       ],
+      "@genoffice/pipelines/slides": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/index.ts"
+      ],
+      "@genoffice/pipelines/slides/audit-deck": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/audit-deck.ts"
+      ],
+      "@genoffice/pipelines/slides/deck-spec": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/deck-spec.ts"
+      ],
+      "@genoffice/pipelines/slides/layout-audit": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/layout-audit.ts"
+      ],
+      "@genoffice/pipelines/slides/outline": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/outline.ts"
+      ],
+      "@genoffice/pipelines/slides/page-spec": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/page-spec.ts"
+      ],
+      "@genoffice/pipelines/slides/stage-check": [
+        "../../vendor/genoffice/packages/pipelines/src/slides/stage-check.ts"
+      ],
       "@genoffice/pptx-engine": [
         "../../vendor/genoffice/packages/pptx-engine/src/index.ts"
       ],

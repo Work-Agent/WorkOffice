@@ -1,0 +1,84 @@
+{
+  "id": "pdf",
+  "resources": [
+    "pdf"
+  ],
+  "events": false,
+  "commands": [
+    {
+      "name": "pdf.read",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "what": {
+          "enum": [
+            "context",
+            "outline",
+            "pages",
+            "text",
+            "find"
+          ]
+        },
+        "page": {
+          "type": "number"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pdf.load",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "base64": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pdf.chunk",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "start": {
+          "type": "number",
+          "required": true
+        },
+        "length": {
+          "type": "number",
+          "required": true
+        },
+        "hash": {
+          "type": "string"
+        },
+        "base64": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pdf.saveCopy",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "token": {
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  ]
+}

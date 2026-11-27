@@ -390,6 +390,16 @@ export function App() {
   )
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [editingCell, setEditingCell] = useState<EditingCellState | null>(null)
+
+  // WorkStudio agent 桥：只暴露选区 / 当前页，不暴露可写模型。
+  useEffect(() => {
+    ;(window as any).__pptxProUi = {
+      getState: () => ({ current, selectedIds, editing, slides }),
+    }
+    return () => {
+      delete (window as any).__pptxProUi
+    }
+  }, [current, selectedIds, editing, slides])
   // Armed shape draw mode (ribbon gallery pick); null = normal selection behavior
   const [drawKind, setDrawKind] = useState<InsertKind | null>(null)
   /** Latest-state bundle for the extracted action modules; refreshed every render (see action-context.ts). */
@@ -967,6 +977,21 @@ export function App() {
   }, [autoSave, path, editing, editingCell, save])
 
   const saveAs = useCallback(() => fileActions.saveAs(() => ctxRef.current), [])
+
+  // Ctrl/Cmd+S：WorkStudio 页面没有 shell 菜单快捷键，页面自己接。
+  // 用 capture 阶段拦截，保证文本 overlay 仍由 save() 先 flush。
+  useEffect(() => {
+    const onSaveKey = (event: KeyboardEvent): void => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      if (event.key.toLowerCase() !== 's') return
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.shiftKey) saveAs()
+      else void save()
+    }
+    window.addEventListener('keydown', onSaveKey, true)
+    return () => window.removeEventListener('keydown', onSaveKey, true)
+  }, [save, saveAs])
   const exportImages = useCallback(() => fileActions.exportImages(ctxRef.current), [])
   const exportPdf = useCallback(() => void fileActions.exportPdf(ctxRef.current), [])
 

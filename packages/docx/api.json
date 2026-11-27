@@ -1,0 +1,192 @@
+{
+  "commands": [
+    {
+      "name": "docx-pro.guide",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "group": {
+          "enum": [
+            "blocks",
+            "editor",
+            "actions"
+          ]
+        },
+        "op": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "docx-pro.read",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "what": {
+          "enum": [
+            "context",
+            "blocks",
+            "comments",
+            "notes",
+            "revisions",
+            "styles",
+            "audit"
+          ]
+        },
+        "startBlockIndex": {
+          "type": "number"
+        },
+        "endBlockIndex": {
+          "type": "number"
+        },
+        "offset": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "docx-pro.apply",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "commands": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        },
+        "docRev": {
+          "type": "number"
+        },
+        "dryRun": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "docx-pro.create",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "docx-pro.load",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "base64": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "docx-pro.save",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "page",
+            "agent"
+          ]
+        },
+        "data": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "docx-pro.attach",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "docx-pro.pending",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "docx-pro.report",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "docRev": {
+          "type": "number",
+          "required": true
+        },
+        "hash": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "docx-pro.detach",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "docx-pro.ack",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        },
+        "ok": {
+          "type": "boolean",
+          "required": true
+        },
+        "payload": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { MultiSelect } from './multi-select'
 import { Editor, Extension, Node } from '@tiptap/core'
 import { SHAPE_INLINE_WRAP } from './floating-z-order'
 import { StreamingTailGuardExtension } from './streaming-tail-guard'
+import { newBlockId } from './block-id'
 import type { ChainedCommands, RawCommands } from '@tiptap/core'
 import { Gapcursor, UndoRedo } from '@tiptap/extensions'
 import { DOMSerializer } from '@tiptap/pm/model'
@@ -257,6 +258,11 @@ export * from './decoration-extensions'
 
 const anchorAttrs = {
   docxIndex: { default: null as number | null },
+  blockId: {
+    default: null as string | null,
+    parseHTML: () => null,
+    renderHTML: () => null,
+  },
   styleId: { default: null as string | null },
   aiChanged: { default: false },
   /** user bookmark names starting in this paragraph */
@@ -3511,6 +3517,11 @@ export const DocTable = Node.create({
   addAttributes() {
     return {
       docxIndex: { default: null as number | null },
+      blockId: {
+        default: null as string | null,
+        parseHTML: () => null,
+        renderHTML: () => null,
+      },
       colWidthsPct: { default: null as number[] | null },
       widthPx: { default: null as number | null },
       widthPct: { default: null as number | null },
@@ -4386,6 +4397,11 @@ export const DocProtected = Node.create({
   addAttributes() {
     return {
       docxIndex: { default: null as number | null },
+      blockId: {
+        default: null as string | null,
+        parseHTML: () => null,
+        renderHTML: () => null,
+      },
       blockRevision: { default: null as Record<string, string> | null },
       blockType: { default: 'passthrough' },
       /** w:pStyle of field/TOC paragraphs: doc style CSS (spacing/line-height) targets data-style */
@@ -6998,7 +7014,7 @@ export const textboxSubExtensions = [
   TextStyleMark,
   FormatOffClearExtension,
   CommentMark,
-  UndoRedo,
+  UndoRedo.configure({ depth: 1000, newGroupDelay: 500 }),
 ]
 
 // ---- find & replace highlighting ----
@@ -7056,10 +7072,49 @@ export const AutoLinkOnDelimiter = Extension.create({
   },
 })
 
+/** Assign / repair stable blockId values after structural edits and paste. */
+const blockIdKey = new PluginKey('blockIds')
+export const BlockIdExtension = Extension.create({
+  name: 'blockIds',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: blockIdKey,
+        appendTransaction: (transactions, _oldState, state) => {
+          if (!transactions.some((transaction) => transaction.docChanged)) return null
+          const seen = new Set<string>()
+          const fixes: Array<{ pos: number; id: string }> = []
+          state.doc.forEach((node, offset) => {
+            const current =
+              typeof node.attrs.blockId === 'string' ? node.attrs.blockId : null
+            if (current && !seen.has(current)) {
+              seen.add(current)
+              return
+            }
+            const id = newBlockId()
+            seen.add(id)
+            fixes.push({ pos: offset, id })
+          })
+          if (fixes.length === 0) return null
+          const tr = state.tr
+          for (const { pos, id } of fixes) {
+            const node = state.doc.nodeAt(pos)
+            if (!node) continue
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, blockId: id })
+          }
+          tr.setMeta('addToHistory', false)
+          return tr
+        },
+      }),
+    ]
+  },
+})
+
 export const editorExtensions = [
   StreamingTailGuardExtension,
   ScriptFonts,
   DocDocument,
+  BlockIdExtension,
   DocText,
   DocHardBreak,
   DocNoteRef,
@@ -7093,7 +7148,7 @@ export const editorExtensions = [
   CommentMark,
   InsMark,
   DelMark,
-  UndoRedo,
+  UndoRedo.configure({ depth: 1000, newGroupDelay: 500 }),
   MultiSelect,
   SearchHighlightExtension,
   PendingCommentHighlightExtension,

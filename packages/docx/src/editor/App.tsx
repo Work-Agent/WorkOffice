@@ -15,7 +15,12 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, SetStateAction } fro
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
 import { handleDocsControl, type ControlRequest } from './control'
-import { DOMParser as PmDOMParser, type Mark as PmMark, Slice as PmSlice } from '@tiptap/pm/model'
+import {
+  DOMParser as PmDOMParser,
+  Fragment,
+  type Mark as PmMark,
+  Slice as PmSlice,
+} from '@tiptap/pm/model'
 import { NodeSelection, TextSelection, type Command, type Transaction } from '@tiptap/pm/state'
 import {
   Dropdown,
@@ -374,6 +379,7 @@ import {
   type PendingNumbering,
 } from './doc-state'
 import {
+  buildDocBytes,
   exportPdf as exportPdfImpl,
   exportHtml as exportHtmlImpl,
   exportMarkdown as exportMarkdownImpl,
@@ -1174,6 +1180,23 @@ export function App() {
       // point, keeping emphasis and structure; 'text' passes through — the
       // handlePaste reroute below sends it down the plain-text lane
       transformPasted: (slice, view) => {
+        // A pasted block must get a fresh blockId; keeping the copied one would
+        // let two blocks claim the same saved-file coordinate.
+        slice = new PmSlice(
+          Fragment.fromArray(
+            slice.content.content.map((node) =>
+              'blockId' in node.attrs
+                ? node.type.create(
+                    { ...node.attrs, blockId: null },
+                    node.content,
+                    node.marks,
+                  )
+                : node,
+            ),
+          ),
+          slice.openStart,
+          slice.openEnd,
+        )
         const mode = consumeForeignPaste()
         if (!mode || mode === 'text') return slice
         const schema = view.state.schema
@@ -1895,6 +1918,7 @@ export function App() {
 
   /** App state bundle for the extracted file actions (file-actions.ts); refreshed every render. */
   const fileCtxRef = useRef<FileActionContext>(null as unknown as FileActionContext)
+  const anchorMapRef = useRef<Map<string, number | null>>(new Map())
   // style-pane previews patch the parsed styles; a font-settle rebuild must keep them
   const liveStylesRef = useRef<{ parsed: ParsedDocFull; styles: Map<string, StyleInfo> } | null>(
     null,
@@ -1902,6 +1926,7 @@ export function App() {
   fileCtxRef.current = {
     editor,
     doc,
+    anchorMapRef,
     dirtyRef,
     saveInFlightRef,
     saveIncompleteRef,
@@ -2039,6 +2064,15 @@ export function App() {
     setCompareResult,
     promptDocxPassword: (info) =>
       setDocPwdPrompt({ path: info.path, name: info.name, value: '', errorKey: '', busy: false }),
+  }
+
+  // ─── docx-pro 页面桥 ─────────────────────────────────────────────────
+  // 计划型写需要两个句柄：live 编辑器（agent 事务）与纯序列化入口
+  // （buildDocBytes，不改变任何状态）。全局名只在本插件页面里使用。
+  ;(window as unknown as { __docxPro?: unknown }).__docxPro = {
+    getCtx: () => fileCtxRef.current,
+    getEditor: () => fileCtxRef.current.editor,
+    serialize: () => buildDocBytes(fileCtxRef.current),
   }
 
   const loadFile = useCallback(async (result: OpenDocxResult) => {
@@ -6528,6 +6562,7 @@ export function App() {
         blocks={doc?.parsed.blocks ?? EMPTY_BLOCKS}
         styles={ribbonStyles}
         docDefaults={doc?.parsed.docDefaults}
+        onStyleDef={upsertStyleDef}
         documentListPresets={documentLists}
         recentListPresets={recentLists}
         section={sections[activeSection]?.settings ?? section}

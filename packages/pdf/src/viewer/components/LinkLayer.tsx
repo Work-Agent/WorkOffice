@@ -19,6 +19,21 @@ interface RawLinkAnnotation {
 
 export const MAX_PAGE_LINKS = 500
 
+/** 外链优先走宿主 openExternal；dev / 非 WorkStudio 环境退回 window.open。 */
+function openExternal(url: string): void {
+  const bridge = window.workStudio
+  if (!bridge) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  void bridge
+    .command('shell', 'native', 'openExternal', { url })
+    .then((result) => {
+      if (result.ok !== true) window.open(url, '_blank', 'noopener,noreferrer')
+    })
+    .catch(() => window.open(url, '_blank', 'noopener,noreferrer'))
+}
+
 function isFiniteRect(rect: unknown): rect is [number, number, number, number] {
   return (
     Array.isArray(rect) &&
@@ -102,7 +117,7 @@ export function LinkLayer({
             onClick={(event) => {
               if (external) {
                 event.preventDefault()
-                window.open(external, '_blank', 'noopener,noreferrer')
+                openExternal(external)
                 return
               }
               event.preventDefault()

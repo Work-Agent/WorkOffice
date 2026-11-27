@@ -7,35 +7,45 @@ declare module '*.md?raw' {
 
 import type { DesktopApi } from '../shared/desktop-api'
 import type { ProjectApi } from '@genoffice/project-store'
+import type { EditorBridge } from '@xlsx/page/bridge'
+import type { SheetLike } from '@xlsx/shared/sheet-types'
 
-interface WorkStudioBus {
-  on(handler: (message: any) => void): () => void
-  send(message: any): void
-  loaded(): void
-}
-
-interface WorkStudioExtension {
-  bus: WorkStudioBus
-  ura: {
-    page: {
-      get<T = unknown>(sessionId?: string): Promise<T>
-      saveBytes<T = unknown>(sessionId: string, bytes: Uint8Array): Promise<T>
-    }
+/** 页面注入的启动数据（见 src/page/main.ts）。 */
+export interface XlsxProBoot {
+  sessionId: string
+  data: {
+    name: string
+    ref: string
+    version: string
+    size?: number
+    sheets: SheetLike[]
   }
+  epoch: number
+  bytes?: Uint8Array
 }
 
-interface WorkStudioAppBridge {
-  available(): Promise<boolean>
-  call<T = unknown>(path: string, input?: unknown): Promise<T>
-  peek<T = unknown>(path: string): Promise<T | null>
+/** App.tsx 暴露给页面代理的编辑器句柄（P3 由 agent 桥使用）。 */
+export interface XlsxProEditorBridge {
+  context(): unknown
+  readCells(addresses: string[], sheetId?: string): unknown
+  sheets(): ReadonlyArray<{ id: string; name: string }>
+  focusSheet(sheetId: string, address?: string): void
+  applyOps(ops: unknown[], dryRun: boolean): Promise<unknown>
+  save(): Promise<{ ok: boolean; path?: string; error?: string }>
+  docRev(): number
+  structureEpoch(): number
+  undo(): boolean
+  undoDepth(): number
 }
 
 declare global {
   interface Window {
     readonly desktopApi: DesktopApi
     readonly projectApi: ProjectApi
-    readonly extension: WorkStudioExtension
-    readonly appBridge: WorkStudioAppBridge
+    /** 编辑器唯一的 I/O 出口：取字节、保存、主题、脏态。 */
+    __xlsxPlus?: EditorBridge
+    __xlsxProBoot?: XlsxProBoot
+    __xlsxPro?: any
   }
 }
 

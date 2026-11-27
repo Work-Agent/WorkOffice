@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // PDF 插件构建：
-//   1. esbuild src/ura.ts → dist/ura.js（pdf-lib 进 bundle，pdfjs-dist 不进）
-//   2. esbuild 纯函数 → dist/shared/*.mjs（node --test 用）
-//   3. vite build → dist/page/**
-//   4. 复制 pdfjs 的 cmaps / standard_fonts / wasm → dist/page/pdfjs/**
+//   1. esbuild src/engine/{index,text}.ts → dist/engine.js + dist/text.js
+//      （code splitting；text.js 由 worker_threads 动态加载）
+//   2. 复制 pdfjs 的 fake worker → dist/pdf.worker.mjs
+//   3. 从 definePlugin 生成 commands.json / api.json / api.d.ts
+//   4. esbuild 纯函数 → dist/shared/*.mjs（node --test 用）
+//   5. vite build → dist/page/**
+//   6. 复制 pdfjs cmaps / standard_fonts / wasm / iccs → dist/page/assets/pdfjs
 //
 // 参数：
-//   --ura-only     只构建注册面
+//   --engine-only  只构建 engine + text + worker + 静态描述
 //   --page-only    只构建页面（仍复制静态资源）
-//   --assets-only  只复制静态资源到 src/page/pdfjs（vite dev 用）
+//   --assets-only  只复制静态资源到 src/page/assets（vite dev 用）
+//   --shared-only  只构建 dist/shared（测试用）
 
 import { execFileSync } from 'node:child_process'
 import {
@@ -20,14 +24,14 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(pkgRoot, '../..')
 const args = process.argv.slice(2)
 const has = (flag) => args.includes(flag)
-const uraOnly = has('--ura-only')
+const engineOnly = has('--engine-only')
 const pageOnly = has('--page-only')
 const assetsOnly = has('--assets-only')
 const sharedOnly = has('--shared-only')
@@ -55,7 +59,7 @@ function copyDir(from, to) {
 
 function copyPdfjsAssets(targetPage) {
   const dist = resolvePdfjsDist()
-  const out = join(targetPage, 'pdfjs')
+  const out = join(targetPage, 'assets', 'pdfjs')
   rmSync(out, { recursive: true, force: true })
   for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
     copyDir(join(dist, dir), join(out, dir))
@@ -63,18 +67,38 @@ function copyPdfjsAssets(targetPage) {
   console.log(`copied pdfjs assets → ${out}`)
 }
 
-async function buildUra() {
+function copyPdfjsWorker() {
+  const dist = resolvePdfjsDist()
+  mkdirSync(join(pkgRoot, 'dist'), { recursive: true })
+  cpSync(join(dist, 'legacy/build/pdf.worker.mjs'), join(pkgRoot, 'dist/pdf.worker.mjs'))
+  console.log('copied pdf.worker.mjs → dist/pdf.worker.mjs')
+}
+
+async function buildEngine() {
   mkdirSync(join(pkgRoot, 'dist'), { recursive: true })
   await build({
-    entryPoints: [join(pkgRoot, 'src/ura.ts')],
-    outfile: join(pkgRoot, 'dist/ura.js'),
+    entryPoints: {
+      engine: join(pkgRoot, 'src/engine/index.ts'),
+      text: join(pkgRoot, 'src/engine/text.ts'),
+    },
+    outdir: join(pkgRoot, 'dist'),
     bundle: true,
+    splitting: true,
     format: 'esm',
     platform: 'node',
     target: 'node22',
-    external: ['electron'],
+    entryNames: '[name]',
+    chunkNames: 'chunks/[name]-[hash]',
+    sourcemap: false,
     logLevel: 'info',
+    legalComments: 'none',
   })
+  copyPdfjsWorker()
+  console.log('built dist/engine.js + dist/text.js')
+  const generator = await import(
+    `${pathToFileURL(join(pkgRoot, 'scripts/gen-commands.mjs')).href}?v=${Date.now()}`
+  )
+  await generator.generate?.()
 }
 
 /** 测试与诊断入口：dist/shared/** 不进安装包（pack.mjs 会跳过）。 */
@@ -114,9 +138,11 @@ function writeBuildInfo() {
   const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
   let upstreamCommit = 'unknown'
   try {
-    upstreamCommit = execFileSync('git', ['-C', join(repoRoot, 'vendor/genoffice'), 'rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-    }).trim()
+    upstreamCommit = execFileSync(
+      'git',
+      ['-C', join(repoRoot, 'vendor/genoffice'), 'rev-parse', 'HEAD'],
+      { encoding: 'utf8' },
+    ).trim()
   } catch {
     /* vendor 未初始化时保留 unknown */
   }
@@ -137,20 +163,26 @@ function writeBuildInfo() {
 
 function assertDist() {
   const required = [
-    'dist/ura.js',
+    'dist/engine.js',
+    'dist/text.js',
+    'dist/pdf.worker.mjs',
     'dist/page/index.html',
-    'dist/page/pdfjs/cmaps',
-    'dist/page/pdfjs/standard_fonts',
-    'dist/page/pdfjs/wasm',
-    'dist/page/pdfjs/iccs',
+    'dist/page/assets/pdfjs/cmaps',
+    'dist/page/assets/pdfjs/standard_fonts',
+    'dist/page/assets/pdfjs/wasm',
+    'dist/page/assets/pdfjs/iccs',
+    'commands.json',
   ]
   for (const file of required) {
-    if (!existsSync(join(pkgRoot, file)))
-      throw new Error(`构建产物缺失：${file}`)
+    if (!existsSync(join(pkgRoot, file))) throw new Error(`构建产物缺失：${file}`)
   }
-  // sidecar 零解析：产物里不应再有主进程 worker。
-  if (existsSync(join(pkgRoot, 'dist/pdf.worker.mjs')))
-    throw new Error('产物不应该包含 dist/pdf.worker.mjs（sidecar 不解析 PDF）')
+  // 旧 URA 注册面不应再出现。
+  if (existsSync(join(pkgRoot, 'dist/ura.js'))) {
+    throw new Error('产物不应该包含 dist/ura.js（PDF 已迁到 SDK 契约）')
+  }
+  if (existsSync(join(pkgRoot, 'dist/pdf.worker.min.mjs'))) {
+    throw new Error('产物不应该包含 dist/pdf.worker.min.mjs')
+  }
 }
 
 async function main() {
@@ -162,8 +194,12 @@ async function main() {
     await buildShared()
     return
   }
-  if (!pageOnly) await buildUra()
-  if (uraOnly) return
+  // 全量构建先清 dist：避免旧的 engine chunk / page 资产混进安装包。
+  if (!engineOnly && !pageOnly) {
+    rmSync(join(pkgRoot, 'dist'), { recursive: true, force: true })
+  }
+  if (!pageOnly) await buildEngine()
+  if (engineOnly) return
   if (!pageOnly) await buildShared()
   buildPage()
   copyPdfjsAssets(join(pkgRoot, 'dist/page'))

@@ -2,48 +2,64 @@
 
 import type { PdfBoot, PdfPageMeta } from '../shared/pdf-types'
 
-export interface PageSessionInfo {
-  id: string
-  ref: string
-  version: string
-  epoch: number
-  codec: string | null
-  surface: string
-  owner?: string
-  page: string
-  data: PdfPageMeta
-  degraded: boolean
-  write: 'none' | 'bytes' | 'plan'
-  size?: number
-  tier?: 'normal' | 'lite' | 'readOnly' | 'refused'
+/** 页面桥返回：宿主 preload 不抛错，统一用 CallResult。 */
+export interface CallError {
+  code: string
+  message: string
 }
 
-export interface ExtensionBridge {
-  ura: {
-    page: {
-      get<T = unknown>(id: string): Promise<T>
-      bytes(id: string, window?: { start?: number; end?: number }): Promise<Uint8Array>
-      close(id: string): Promise<unknown>
-    }
-    onChange(
-      cb: (event: { ref: string; type: string; version?: string; at: number }) => void,
-    ): () => void
-  }
-  bus: {
-    on(cb: (message: { type: string; [key: string]: unknown }) => void): () => void
-    send(message: { type: string; [key: string]: unknown }): void
-    loaded(): void
-  }
+export type CallResult<T = unknown> = { ok: true; data: T } | { ok: false; error: CallError }
+
+export type DomainUpdate =
+  | { type: 'snapshot'; domain: string; resource: string; data: unknown }
+  | { type: 'patch'; domain: string; resource: string; data: Record<string, unknown> }
+  | { type: 'event'; domain: string; resource: string; event: string; data: unknown }
+
+export interface WorkStudioBridge {
+  readonly workspaceId: string | null
+  command<T = unknown>(
+    domain: string,
+    resource: string,
+    action: string,
+    input?: unknown,
+  ): Promise<CallResult<T>>
+  subscribe(domain: string, resource: string): Promise<unknown>
+  unsubscribe(domain: string, resource: string): void
+  onUpdate(listener: (update: DomainUpdate) => void): () => void
+}
+
+/** pdf.load 的返回：小文件带 bytes（或 data），大文件只带元数据。 */
+export interface LoadResult {
+  ref: string
+  name: string
+  size: number
+  hash: string
+  meta: PdfPageMeta
+  inline: boolean
+  bytes?: Uint8Array
+  data?: string
+}
+
+/** pdf.chunk 的返回：bytes 或 base64 兜底。 */
+export interface ChunkResult {
+  ref: string
+  start: number
+  end: number
+  size: number
+  hash: string
+  bytes?: Uint8Array
+  data?: string
+}
+
+export interface SaveFileResult {
+  cancelled?: boolean
+  token?: string
+  path?: string
 }
 
 declare global {
   interface Window {
-    extension: ExtensionBridge
-    appBridge?: {
-      available(): Promise<boolean>
-      call<T = unknown>(path: string, input?: unknown): Promise<T>
-      peek<T = unknown>(path: string): Promise<T | null>
-    }
+    workStudio: WorkStudioBridge
     __pdfBoot?: PdfBoot
   }
 }

@@ -1,0 +1,7 @@
+# 物化的渲染器视图（vendor + src/fork），每次构建重建
+build/
+# 构建产物与 workstudio-plugin 生成物
+dist/
+commands.json
+api.json
+api.d.ts

@@ -4452,6 +4452,27 @@ th.cell-rev-del {
   --doc-autospace-pad: 0.125em;
 }
 
+/* WorkStudio 注入的 appearance.css 里有
+   `:focus-visible { outline: 2px solid var(--biz-accent) !important; }`，
+   它会把焦点环画到可编辑的纸张元素（.doc-page 就是 ProseMirror 根）上，
+   在页面上留下一圈蓝框。Word 类界面不这么做：光标本身就是焦点指示。
+   页眉/页脚的内嵌编辑区同理（它们自己的 outline: none 会被 !important 盖掉）。
+   这里用更高特异性 + !important 把焦点环压掉，只影响焦点，不影响其余描边。 */
+.doc-page:focus-visible,
+.doc-page:focus,
+.page-wrap:focus-visible,
+.page-wrap:focus,
+.editor-scroll:focus-visible,
+.editor-scroll:focus,
+.doc-zoom:focus-visible,
+.doc-zoom:focus,
+.page-hf-edit-surface:focus-visible,
+.page-hf-edit-surface:focus,
+.page-hf-editor:focus-visible,
+.page-hf-editor:focus {
+  outline: none !important;
+}
+
 /* CJK/Latin autospace pad: the character after the boundary carries the extra
    1/8em as a start margin. Plain inline (not inline-block): an atomic inline
    would suppress Chromium's own text-autospace gap. Not an empty span: when an

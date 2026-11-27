@@ -57,7 +57,7 @@ const ru: Record<keyof typeof en, string> = {
  * reviewed terminology. Keeping one complete key set prevents partially
  * translated dialogs and lets language packs override the shard incrementally.
  */
-const dicts = {
+export const tableStrings = defineStrings({
   zh: en,
   en,
   ja: en,
@@ -79,6 +79,7 @@ const dicts = {
   hi: en,
   'zh-TW': en,
   vi: en,
-}
-// 上游新增 tr / hu：这两个文件用内联字典，直接复用 en
-export const tableStrings = defineStrings({ ...dicts, tr: dicts.en, hu: dicts.en })
+  // 上游新增 tr / hu：fork 未翻译，先映射到 en（宿主只切 zh）
+  tr: en,
+  hu: en,
+})

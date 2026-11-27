@@ -6,6 +6,18 @@
 > 2. 这套分层如何把“Office 功能”拆成可复用的部件？
 > 3. 我们怎样把这些部件改造成 WorkStudio 插件，同时不重写 Office？
 
+> **代际说明**：本仓库同时存在两代插件契约，本文的 §3–§5 只描述**旧的一代**。
+>
+> | 代际 | 包 | 页面 / 写 |
+> | --- | --- | --- |
+> | URA（apiVersion 1/2） | 旧 `docx` / `xlsx` / `pptx`（见 `legacy/`） | `window.extension.ura.page.*` + `codec / presenter / sidecar` + `plan` 写 |
+> | SDK（`definePlugin`） | `docx-pro` `pptx` `xlsx` `pdf` | `window.workStudio.command/subscribe/onUpdate`，写是命令；**没有** `ura.page` / `window.extension` |
+>
+> `docx-pro`、`pptx`、`xlsx`、`pdf` 统一为版本 `0.2.0`，均已就地改造成 SDK 文档页插件，见
+> [`docx-pro-remediation.md`](./docx-pro-remediation.md) 与 [`pptx-remediation.md`](./pptx-remediation.md)。
+> 其余新实现见 [`xlsx-design.md`](./xlsx-design.md)、[`docx-plus-design.md`](./docx-plus-design.md)、
+> [`pdf-design.md`](./pdf-design.md)；已弃用代际的历史文档收在 [`legacy/`](./legacy/README.md)。
+
 ---
 
 ## 0. 一页结论
@@ -307,6 +319,28 @@ PPTX 的编辑原则：
 - 保存时 `savePptx` 生成新字节，再 `saveBytes`；
 - 保存后重新 `openPptx(bytes)`，刷新元素 id 和字节锚点。
 
+### 3.4 PDF：PDF.js + 自定义命令
+
+```
+PDF bytes
+  → pdf.load：头部校验 + trailer 探测 + pdf-lib 元数据增强
+  → page：pdf.chunk 分块拼装 → PDF.js getDocument
+  → canvas + textLayer + linkLayer
+  → 打印 / 另存副本（只读，无保存）
+```
+
+PDF 是只读文档，不复用 GenOffice 引擎，也不使用页面租约：
+
+| 部件 | 来源 | 我们怎么用 |
+| --- | --- | --- |
+| 渲染 / 文本层 / 大纲 / 搜索 | `pdfjs-dist`（legacy build） | 页面内直接用；worker 由 Vite 打包 |
+| 元数据 / 文档副本 | `pdf-lib` | engine 的 `pdf.load` 与 `resources.read` |
+| 页面命令 | 本插件 | `pdf.load` / `pdf.chunk` / `pdf.saveCopy` |
+| 助手读 | 本插件 | `resources.pdf` + `pdf.read`（文本抽取走 worker_threads） |
+
+没有 `codec / presenter / sidecar`，没有 `saveBytes`，也没有页内模型权威；
+写操作只有“另存副本”，且不改变原 `ref`。
+
 ---
 
 ## 4. WorkStudio 的接入契约
@@ -554,6 +588,7 @@ plan { kind: 'save' }  ── 无页面：块级 XML 切片 ──↗
 | DOCX（`docx-pro`） | 同上 + 3 个工具 / 41 条命令 + 无页面块命令 | 页面路径 `maxCommitBytes` 16 MB；无页面无选区；批注/页脚/页面设置等 15 个动作未接线 |
 | XLSX | Ribbon、网格、公式、选择、格式、查找、筛选、透视、图表、保存 | 大文件/公式流式仍按页面内加载策略处理 |
 | PPTX | Ribbon、画布、原位文本、变换、幻灯片/节、表格/图表、图片/媒体、动画、录音、母版、脱敏、放映、PDF、保存 | 观众窗口是 Document PiP；自动第二屏全屏/交换显示器受浏览器权限限制 |
+| PDF | 真字节渲染、大纲、缩略图、搜索、链接、打印、另存副本；`pdf.read` / `grep` 读元数据与页文本 | 只读；扫描件无文本层；打印是栅格；加密 PDF 的 agent 文本读取需页面解锁 |
 
 观众窗口说明：
 
@@ -593,9 +628,11 @@ plan { kind: 'save' }  ── 无页面：块级 XML 切片 ──↗
 
 ```bash
 pnpm setup          # sparse checkout GenOffice + pnpm install
-pnpm typecheck      # docx / xlsx / pptx，包含 renderer
+pnpm typecheck      # docx / xlsx / pptx / pdf，包含 renderer 与 engine
 pnpm build          # codec + 页面 bundle
-pnpm verify         # URA codec / presenter / sidecar 契约
+pnpm verify         # 旧 URA 插件契约（pdf 已迁到 SDK，不在其中）
+pnpm verify:pdf     # PDF SDK 清单 / 产物 / 静态命令 / 旧面残留
+pnpm test:pdf       # PDF 引擎 / 文本 / 分块 / 打印纯函数
 ```
 
 打包与安装：

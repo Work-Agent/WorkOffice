@@ -1,75 +1,35 @@
-import { existsSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vite'
+// @ts-ignore 解析器是 .mjs：构建脚本与 vite 共用同一份规则
+import { viteAliases, viteGenoffice } from './scripts/genoffice-resolve.mjs'
 
-const vendor = resolve(__dirname, '../../vendor/genoffice')
+const here = dirname(fileURLToPath(import.meta.url))
+const pageDir = join(here, 'src/page')
 
-/** GenOffice packages are source-only in the monorepo; map package names to vendor src. */
-function genofficeSource(): Plugin {
-  return {
-    name: 'genoffice-source',
-    enforce: 'pre',
-    resolveId(source) {
-      if (!source.startsWith('@genoffice/')) return null
-      const rest = source.slice('@genoffice/'.length)
-      const slash = rest.indexOf('/')
-      const pkg = slash < 0 ? rest : rest.slice(0, slash)
-      const sub = slash < 0 ? '' : rest.slice(slash + 1)
-      const base = join(vendor, 'packages', pkg, 'src', sub)
-      for (const candidate of [
-        base,
-        `${base}.ts`,
-        `${base}.tsx`,
-        `${base}.css`,
-        join(base, 'index.ts'),
-        join(base, 'index.tsx'),
-      ]) {
-        if (existsSync(candidate) && statSync(candidate).isFile()) return candidate
-      }
-      return null
-    },
-  }
+if (!existsSync(join(pageDir, 'index.html'))) {
+  throw new Error(`页面入口不存在：${join(pageDir, 'index.html')}`)
 }
 
 export default defineConfig({
-  root: 'src/editor',
+  root: pageDir,
   base: './',
-  plugins: [genofficeSource(), react()],
+  plugins: [viteGenoffice()],
   resolve: {
     alias: [
-      {
-        find: /^node:crypto$/,
-        replacement: resolve(__dirname, 'src/editor/shims/node-crypto.ts'),
-      },
-      {
-        find: /^node:fs\/promises$/,
-        replacement: resolve(__dirname, 'src/editor/shims/node-fs-promises.ts'),
-      },
-      {
-        find: /^node:fs$/,
-        replacement: resolve(__dirname, 'src/editor/shims/node-fs.ts'),
-      },
-      {
-        find: /^node:path$/,
-        replacement: resolve(__dirname, 'src/editor/shims/node-path.ts'),
-      },
-      {
-        find: /^@genoffice\/([^/]+)\/(.*)$/,
-        replacement: join(vendor, 'packages/$1/src/$2'),
-      },
-      {
-        find: /^@genoffice\/([^/]+)$/,
-        replacement: join(vendor, 'packages/$1/src/index.ts'),
-      },
+      // 页面里没有 Node：gateway 的少数 node: 依赖走浏览器 shim（与旧 xlsx-pro 同一套）。
+      { find: /^node:crypto$/, replacement: join(here, 'src/editor/shims/node-crypto.ts') },
+      { find: /^node:fs\/promises$/, replacement: join(here, 'src/editor/shims/node-fs-promises.ts') },
+      { find: /^node:fs$/, replacement: join(here, 'src/editor/shims/node-fs.ts') },
+      { find: /^node:path$/, replacement: join(here, 'src/editor/shims/node-path.ts') },
+      ...viteAliases(),
     ],
   },
   esbuild: { jsx: 'automatic' },
-  optimizeDeps: {
-    esbuildOptions: { jsx: 'automatic' },
-  },
+  optimizeDeps: { esbuildOptions: { jsx: 'automatic' } },
   build: {
-    outDir: '../../dist/page',
+    outDir: resolve(here, 'dist/page'),
     emptyOutDir: true,
     target: 'chrome140',
     assetsInlineLimit: 0,

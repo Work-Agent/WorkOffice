@@ -32,7 +32,7 @@ function genofficeSource(): Plugin {
 }
 
 export default defineConfig({
-  root: 'src/editor',
+  root: 'src/page',
   base: './',
   plugins: [genofficeSource(), react()],
   resolve: {

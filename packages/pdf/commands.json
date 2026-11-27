@@ -1,0 +1,83 @@
+{
+  "commands": [
+    {
+      "name": "pdf.read",
+      "summary": "读 PDF：context（元数据）/ outline（书签）/ pages（页尺寸）/ text（单页文本）/ find（全文查找）。只读，不写盘。",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "what": {
+          "enum": [
+            "context",
+            "outline",
+            "pages",
+            "text",
+            "find"
+          ]
+        },
+        "page": {
+          "type": "number"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pdf.load",
+      "summary": "页面加载：元数据 + hash；≤16 MB 直接带字节",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "base64": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pdf.chunk",
+      "summary": "页面分块取字节（大文件）",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "start": {
+          "type": "number",
+          "required": true
+        },
+        "length": {
+          "type": "number",
+          "required": true
+        },
+        "hash": {
+          "type": "string"
+        },
+        "base64": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pdf.saveCopy",
+      "summary": "另存副本（宿主 save token + 页面当前字节）",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "token": {
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  ]
+}

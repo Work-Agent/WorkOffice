@@ -40,6 +40,17 @@ function clampScale(value: number): number {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, value))
 }
 
+/** 资源面板 / agent open 带的定位：pdf:page:12、#p=12、12。 */
+function pageOfLocator(locator: string): number {
+  if (!locator) return 0
+  for (const pattern of [/^pdf:page:(\d+)$/i, /[#?&]p=(\d+)/i, /^p(?:age)?=(\d+)$/i]) {
+    const match = pattern.exec(locator)
+    if (match) return Number(match[1])
+  }
+  const value = Number(locator)
+  return Number.isInteger(value) && value > 0 ? value : 0
+}
+
 async function probeInitialGeom(doc: PDFDocumentProxy): Promise<PageGeom[]> {
   const out: PageGeom[] = []
   let base: PageGeom
@@ -114,7 +125,9 @@ export function App() {
   const [matchIndex, setMatchIndex] = useState(0)
   const [activeMatch, setActiveMatch] = useState<SearchMatch | null>(null)
   const [wrongPassword, setWrongPassword] = useState(false)
-  const [warnings, setWarnings] = useState<string[]>(() => (boot.degraded ? ['degraded'] : []))
+  const [warnings, setWarnings] = useState<string[]>(() =>
+    boot.data.metadataWarning ? ['metadata'] : [],
+  )
   const [externalVersion, setExternalVersion] = useState<string | null>(null)
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -227,10 +240,6 @@ export function App() {
         if (!startedRef.current) {
           startedRef.current = true
           setFit('width')
-          requestAnimationFrame(() => {
-            window.extension.bus.loaded()
-            window.extension.bus.send({ type: 'dirty', dirty: false })
-          })
         }
       } catch (cause) {
         if (generation !== loadGenRef.current) return
@@ -259,15 +268,7 @@ export function App() {
 
   // 外部变更：只提示，不产生写冲突。
   useEffect(() => {
-    if (typeof window.extension.ura.onChange !== 'function') return
-    const off = window.extension.ura.onChange((event) => {
-      if (event.ref === boot.data.ref && event.type === 'content') {
-        setExternalVersion(event.version ?? '')
-      }
-    })
-    return () => {
-      if (typeof off === 'function') off()
-    }
+    return boot.watchExternal(() => setExternalVersion('changed'))
   }, [boot])
 
   const reloadDocument = useCallback(async () => {
@@ -557,15 +558,7 @@ export function App() {
     setBusy(true)
     try {
       const bytes = await boot.refetch()
-      const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = boot.data.name
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      await boot.saveCopy(bytes)
     } catch (cause) {
       showToast(t('saveCopyFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
     } finally {
@@ -664,6 +657,16 @@ export function App() {
   )
 
   const ready = status === 'ready' && doc !== null && pages.length > 0
+
+  // 从资源面板 / agent open 带过来的定位：就绪后跳一次。
+  const locatorDoneRef = useRef(false)
+  useEffect(() => {
+    if (locatorDoneRef.current || status !== 'ready' || pages.length === 0) return
+    locatorDoneRef.current = true
+    const target = pageOfLocator(boot.locator)
+    if (target > 0) goToPage(target)
+  }, [status, pages.length, boot.locator, goToPage])
+
   const statusText = printProgress
     ? t('printProgress', { done: printProgress.done, total: printProgress.total })
     : reloading
@@ -700,13 +703,13 @@ export function App() {
         />
       )}
 
-      {warnings.includes('degraded') && (
+      {warnings.includes('metadata') && (
         <div className="pdf-banner" role="status">
-          <span>{t('degradedHint')}</span>
+          <span>{t('largeFileMetadata')}</span>
           <button
             type="button"
             className="pdf-banner-close"
-            onClick={() => setWarnings((prev) => prev.filter((item) => item !== 'degraded'))}
+            onClick={() => setWarnings((prev) => prev.filter((item) => item !== 'metadata'))}
             aria-label={t('dismiss')}
           >
             ×

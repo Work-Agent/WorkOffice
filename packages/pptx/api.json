@@ -1,0 +1,255 @@
+{
+  "id": "pptx",
+  "resources": [
+    "pptx"
+  ],
+  "events": true,
+  "commands": [
+    {
+      "name": "pptx.guide",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "group": {
+          "enum": [
+            "text",
+            "element",
+            "insert",
+            "table",
+            "slide",
+            "deck",
+            "chart"
+          ]
+        },
+        "op": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.read",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "what": {
+          "enum": [
+            "context",
+            "outline",
+            "slides",
+            "slide",
+            "notes",
+            "comments",
+            "charts",
+            "tables",
+            "theme",
+            "audit",
+            "find"
+          ]
+        },
+        "slide": {
+          "type": "number"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pptx.check",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "outline": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "styles": {
+          "type": "boolean"
+        },
+        "audit": {
+          "type": "boolean"
+        },
+        "skeleton": {
+          "type": "boolean"
+        },
+        "slide": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pptx.create",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pages": {
+          "type": "string"
+        },
+        "slides": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "theme": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.apply",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        },
+        "docRev": {
+          "type": "number"
+        },
+        "dryRun": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pptx.load",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.save",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.saveAs",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "token": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.attach",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.pending",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.report",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "hash": {
+          "type": "string"
+        },
+        "docRev": {
+          "type": "number"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pptx.detach",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.ack",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        },
+        "ok": {
+          "type": "boolean",
+          "required": true
+        },
+        "payload": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

@@ -313,7 +313,8 @@ const LAYOUT_ERROR_KEYS = {
   tooManyRowLines: 'appPivotTooManyRowLines',
   needsValues: 'appPivotNeedsValues',
   pageItemMissing: 'appPivotPageItemMissing',
-  // 上游新增的 3 个 pivot 错误码（f6c2358c）：落到最接近的既有文案上
+  // 上游新增的 3 个 pivot 错误码（f6c2358c）：fork 尚无对应文案，落到最接近的
+  // 既有提示上，避免为 3 条新错误在 22 种语言里各加一行。
   baseFieldMissing: 'appPivotFieldNotHeader',
   baseFieldNotAxis: 'appPivotFieldNotHeader',
   baseItemMissing: 'appPivotPageItemMissing',

@@ -1,50 +1,60 @@
 {
   "name": "@workstudio/plugin-pptx",
-  "version": "0.1.1",
-  "description": "PPTX 编辑：GenOffice Slides renderer + pptx-engine/pptx-ops 写回",
+  "version": "0.2.0",
+  "description": "PowerPoint 演示文稿（.pptx）：WorkStudio SDK 文档页插件。打开才写，助手写经页面队列。",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./ura": "./dist/ura.js"
+    "./workstudio": "./dist/engine.js"
   },
   "workstudio": {
     "id": "pptx",
     "label": "PowerPoint 演示文稿",
-    "icon": "presentation",
-    "page": "dist/page/index.html",
-    "apiVersion": 1
+    "icon": "list",
+    "pages": {
+      "content": "dist/page/index.html"
+    },
+    "claims": [
+      {
+        "extensions": ["pptx", "pptm", "potx"],
+        "priority": 100
+      }
+    ],
+    "skills": ["skills/pptx"]
   },
   "scripts": {
-    "build": "pnpm build:ura && pnpm build:page",
-    "build:ura": "esbuild src/ura.ts --bundle --format=esm --platform=node --target=node22 --external:electron --outfile=dist/ura.js",
-    "build:page": "vite build",
+    "build": "node scripts/gen-op-catalog.mjs && node scripts/build.mjs",
+    "build:engine": "node scripts/build.mjs --engine-only",
+    "build:page": "node scripts/build.mjs --page-only",
+    "gen:commands": "node scripts/gen-commands.mjs",
+    "build:seed": "node scripts/gen-seed.mjs",
+    "gen:catalog": "node scripts/gen-op-catalog.mjs",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "test": "node --test tests/engine.test.mjs",
+    "verify": "node scripts/verify.mjs",
+    "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});for(const f of ['commands.json','api.json','api.d.ts'])fs.rmSync(f,{force:true})\""
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",
     "acorn": "^8.19.0",
     "buffer": "^6.0.3",
     "fflate": "^0.8.2",
-    "konva": "^9.3.20",
+    "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-konva": "^19.0.10",
-    "three": "^0.186.1"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "@work-studio/sdk": "^0.2.0",
     "bidi-js": "^1.0.3",
     "esbuild": "^0.27.3",
     "fast-xml-parser": "^5.3.4",
-    "jszip": "^3.10.1",
     "opentype.js": "^2.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"

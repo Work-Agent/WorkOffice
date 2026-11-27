@@ -43,13 +43,6 @@ const PLUGINS = [
     surface: 'pptx-pro',
     extensions: ['pptx', 'pptm', 'potx'],
   },
-  {
-    id: 'pdf',
-    mime: 'application/pdf',
-    surface: 'pdf-viewer',
-    extensions: ['pdf'],
-    readonly: true,
-  },
 ]
 
 let failed = 0
@@ -74,18 +67,6 @@ for (const plugin of PLUGINS) {
   const manifest = JSON.parse(
     await readFile(join(root, 'packages', plugin.id, 'package.json'), 'utf8'),
   )
-  if (plugin.readonly) {
-    check(
-      manifest.workstudio?.write === undefined,
-      '只读插件不应声明 workstudio.write',
-    )
-    check(
-      manifest.workstudio?.content === 'pulled',
-      "只读查看器应声明 workstudio.content: 'pulled'",
-    )
-    check(manifest.workstudio?.tools === undefined, '只读插件不应声明 tools')
-    check(manifest.workstudio?.engine === undefined, '只读插件不应声明 engine')
-  }
   globalThis.__workstudioSdk = {
     registerTransport() {},
     registerStore() {},

@@ -1,27 +1,44 @@
 {
-  "name": "@workstudio/plugin-docx",
-  "version": "0.1.1",
-  "description": "DOCX 阅读与编辑：基于 GenOffice Docs 渲染器，字节保真保存",
+  "name": "@workstudio/plugin-docx-pro",
+  "version": "0.2.0",
+  "description": "Word 文档（.docx）：WorkStudio SDK 文档页插件。页面打开才写，Agent 写经页面队列。",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./ura": "./dist/ura.js"
+    "./workstudio": "./dist/engine.js"
   },
   "workstudio": {
-    "id": "docx",
+    "id": "docx-pro",
     "label": "Word 文档",
     "icon": "file-text",
-    "page": "dist/page/index.html",
-    "apiVersion": 1
+    "pages": {
+      "content": "dist/page/index.html"
+    },
+    "claims": [
+      {
+        "extensions": [
+          "docx",
+          "docm",
+          "dotx"
+        ],
+        "priority": 100
+      }
+    ],
+    "skills": [
+      "skills/docx"
+    ]
   },
   "scripts": {
-    "build": "pnpm build:ura && pnpm build:page",
-    "build:ura": "esbuild src/ura.ts --bundle --format=esm --platform=node --target=node22 --external:electron --outfile=dist/ura.js",
-    "build:page": "vite build",
+    "build": "node scripts/build.mjs",
+    "build:engine": "node scripts/build.mjs --engine-only",
+    "build:page": "node scripts/build.mjs --page-only",
+    "gen:commands": "node scripts/gen-commands.mjs",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "verify": "node scripts/verify.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('commands.json',{force:true})\"",
+    "test": "node --test tests/sdk-engine.test.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2"

@@ -1,4 +1,8 @@
-// ─── PPTX 页面入口：GenOffice Slides renderer + WorkStudio host ─────
+// ─── GenOffice Slides 页面挂载 ─────────────────────────────────────────
+//
+// 只负责：语言 / 主题 / 字体 / React 挂载。
+// 打开（load）、保存、助手请求都在 src/page/main.ts 里接线，
+// 这样 editor 目录不出现任何宿主 I/O。
 
 import './shims/buffer-global'
 
@@ -8,7 +12,6 @@ import { htmlDir, htmlLang, type Lang } from '@genoffice/i18n'
 import { installScreenTips } from '@genoffice/ui'
 import { App } from './App'
 import { LocaleProvider, setModuleLang } from './i18n/locale'
-import { installWorkStudioSlidesHost, readHostTheme } from './workstudio-host'
 
 import '@genoffice/ui/tokens.css'
 import '@genoffice/ui/screentip.css'
@@ -18,70 +21,25 @@ import '@genoffice/ui/ribbon-collapse.css'
 import '@genoffice/ui/markdown.css'
 import './styles.css'
 
-const root = document.getElementById('root')
-if (!root) throw new Error('Missing application root.')
+export function mountEditor(): void {
+  const root = document.getElementById('root')
+  if (!root) throw new Error('Missing application root.')
 
-installScreenTips()
-
-function fail(message: string): void {
-  if (!root) return
-  root.innerHTML = `<div style="padding:24px;color:#b91c1c;white-space:pre-wrap">${message}</div>`
-}
-
-function applyTheme(theme: 'light' | 'dark'): void {
-  document.documentElement.dataset.theme = theme
-  document.documentElement.style.colorScheme = theme
-}
-
-async function bootstrap(): Promise<void> {
-  const sessionId = new URLSearchParams(location.search).get('session')
-  if (!sessionId) {
-    fail('缺少页面会话：请从 WorkStudio 资源面板打开 PPTX 演示文稿')
-    return
-  }
-
-  let info: { id: string; data: any } | null = null
-  let theme: 'light' | 'dark' = 'light'
-  try {
-    info = await window.extension.ura.page.get<{
-      id: string
-      data: any
-    }>(sessionId)
-    theme = await readHostTheme()
-    applyTheme(theme)
-  } catch (error) {
-    fail(
-      `PPTX 打开失败：${error instanceof Error ? error.message : String(error)}`,
-    )
-    return
-  }
-  if (!info?.data?.bytes) {
-    fail('PPTX 页面数据缺少字节内容')
-    return
-  }
-
+  const boot = window.__pptxProBoot
   const lang: Lang = 'zh'
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
   document.documentElement.dir = htmlDir(lang)
 
-  await installWorkStudioSlidesHost({ sessionId, data: info.data })
+  installScreenTips()
 
-  window.extension.bus.on((message) => {
-    if (message.type === 'theme') {
-      applyTheme(message.theme === 'dark' ? 'dark' : 'light')
-    }
-  })
-
-  createRoot(root as HTMLElement).render(
+  createRoot(root).render(
     <React.StrictMode>
       <LocaleProvider initial={lang}>
         <App />
       </LocaleProvider>
     </React.StrictMode>,
   )
-  window.extension.bus.loaded()
-  window.extension.bus.send({ type: 'dirty', dirty: false })
-}
 
-void bootstrap()
+  if (!boot) console.warn('[pptx] boot 数据缺失：页面没有经过 pptx.load')
+}

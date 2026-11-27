@@ -1,0 +1,263 @@
+{
+  "commands": [
+    {
+      "name": "pptx.guide",
+      "summary": "PPT 命令目录：无参分组，group 取组内 schema，op 取单条",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "group": {
+          "enum": [
+            "text",
+            "element",
+            "insert",
+            "table",
+            "slide",
+            "deck",
+            "chart"
+          ]
+        },
+        "op": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.read",
+      "summary": "读演示文稿：概览 / 单页 / 备注 / 批注 / 主题 / 审计 / 查找",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "what": {
+          "enum": [
+            "context",
+            "outline",
+            "slides",
+            "slide",
+            "notes",
+            "comments",
+            "charts",
+            "tables",
+            "theme",
+            "audit",
+            "find"
+          ]
+        },
+        "slide": {
+          "type": "number"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pptx.check",
+      "summary": "写前检查：outline / pages 断言或对现有文件跑几何审计",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "outline": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "styles": {
+          "type": "boolean"
+        },
+        "audit": {
+          "type": "boolean"
+        },
+        "skeleton": {
+          "type": "boolean"
+        },
+        "slide": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "pptx.create",
+      "summary": "新建演示文稿（目标必须不存在）：设计稿 pages 或文字稿 slides",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pages": {
+          "type": "string"
+        },
+        "slides": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "theme": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.apply",
+      "summary": "执行一批命令：只入队，由已打开的页面执行并保存",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        },
+        "docRev": {
+          "type": "number"
+        },
+        "dryRun": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pptx.load",
+      "summary": "页面加载：一次返回整份字节",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.save",
+      "summary": "页面保存当前 ref（页面唯一落盘点）",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "baseHash": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pptx.saveAs",
+      "summary": "另存为：token 由 shell/native.saveFile 签发",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "token": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.attach",
+      "summary": "页面登记租约",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.pending",
+      "summary": "页面取回待处理请求正文",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.report",
+      "summary": "页面续期租约并上报状态",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        },
+        "hash": {
+          "type": "string"
+        },
+        "docRev": {
+          "type": "number"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "pptx.detach",
+      "summary": "页面释放租约",
+      "args": {
+        "ref": {
+          "type": "string",
+          "required": true
+        },
+        "pageId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "pptx.ack",
+      "summary": "页面回执，结算待处理请求",
+      "args": {
+        "id": {
+          "type": "string",
+          "required": true
+        },
+        "ok": {
+          "type": "boolean",
+          "required": true
+        },
+        "payload": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

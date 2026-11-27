@@ -13,17 +13,20 @@ renderer、engine 与操作层，宿主侧只接 WorkStudio 的 URA 页面会话
 | 包 | 页面 | 写形态 | 说明 |
 | --- | --- | --- | --- |
 | `@workstudio/plugin-docx` | GenOffice Docs 编辑器 fork | `bytes` | 文本、分页、Ribbon、审阅、打印/导出 |
-| `@workstudio/plugin-xlsx` | GenOffice Sheets renderer | `bytes` | Ribbon、Univer 网格、公式栏、格式、查找、筛选、透视、图表 |
-| `@workstudio/plugin-xlsx-pro` | 同上 renderer + gateway 计划引擎 | `plan` | **合体版**：完整 Sheets 编辑器 + 4 个工具 / 56 条命令；有页面交整份字节，无页面交 gateway 保存请求 |
-| `@workstudio/plugin-pptx` | GenOffice Slides renderer | `bytes` | Konva 画布、原位文本、变换、幻灯片/节、表格/图表、媒体、动画、母版、放映、PDF |
+| `@workstudio/plugin-xlsx` | GenOffice Sheets 页面层 + `__xlsxPlus` 桥 | 命令 | **新框架版**：单文件、`definePlugin` 命令 + 租约令牌；wasm 流式打开、保存/另存/自动保存/恢复副本、agent 读与写 |
+| `@workstudio/plugin-pptx` | GenOffice Slides 编辑器 | 命令 | **新框架版**：`definePlugin` 13 命令；打开一次 `load`、保存一次 `save`，助手写经页面队列（无页面即拒） |
+| `@workstudio/plugin-pdf` | PDF.js 查看器 | 只读 | **新框架版**：`definePlugin` + `resources.pdf`；`pdf.read` / `pdf.load` / `pdf.chunk` / `pdf.saveCopy`；渲染、大纲、搜索、打印、另存副本 |
 | `@workstudio/plugin-docx-pro` | 同上编辑器 + 块命令引擎 | `plan` | **合体版**：完整编辑器 + 3 个工具 / 41 条命令；有页面走编辑器事务，无页面走块级 XML 切片 |
-| `@workstudio/plugin-pptx-pro` | 同上 Slides 编辑器 + 常驻 `OpenedPptx` | `plan` | **合体版**：完整 Slides 编辑器 + 4 个工具 / 63 条命令；页面交 `TxnRequest`，无页面走 `runTxn + savePptxToFile` |
 | `@workstudio/plugin-office-docx` | 块列表 | `plan` | 纯后台/批处理的最小实现（无分页渲染） |
 
-> `docx` / `docx-pro` / `office-docx` 声明同一个 MIME，`xlsx` / `xlsx-pro` 声明同一个 MIME，`pptx` / `pptx-pro` 声明同一个 MIME，**同一工作区只能启用一个**；
-> 后注册者会在注册表里 override 前者的 codec / presenter。
+> `docx` / `docx-pro` / `office-docx` 声明同一个 MIME，`xlsx` / `xlsx-pro` 声明同一个 MIME；
+> `pptx` 用 `claims(pptx/pptm/potx, priority 100)` 认领，`pdf` 用 `claims(pdf, priority 100)` 认领；
+> 同一扩展名只能有一个生效。
 
-插件都注册：
+> `docx-pro` / `xlsx` / `pptx` / `pdf` 是 SDK 插件，不注册 codec / presenter / sidecar；
+> 下面这段描述的是旧 URA 插件（`docx` / `office-docx` / `xlsx-pro` 等）。
+
+旧 URA 插件都注册：
 
 ```ts
 registerCodec(codec)
@@ -56,10 +59,8 @@ packages/
 │  ├─ src/{page,engine,shared,tools,ura.ts}
 │  ├─ skills/xlsx/SKILL.md
 │  └─ tests/
-├─ pptx/
-│  └─ src/{editor,shared,ura.ts}
-├─ pptx-pro/                 # 合体：完整 Slides 编辑器 + 常驻模型计划型写
-│  ├─ src/{page,engine,shared,editor,tools,ura.ts}
+├─ pptx/                     # SDK 文档页插件：完整 Slides 编辑器
+│  ├─ src/{engine,page,shared,editor,tools}
 │  ├─ skills/pptx/SKILL.md
 │  └─ tests/
 ├─ vendor/genoffice/          # sparse checkout 的 GenOffice 源码
@@ -79,7 +80,7 @@ XLSX / PPTX 的 `src/editor` 是从 GenOffice 对应 renderer fork 的页面层�
 
 ```bash
 pnpm setup          # sparse checkout GenOffice + 安装依赖
-pnpm typecheck      # docx / xlsx / pptx，包含 renderer
+pnpm typecheck      # docx / xlsx / pptx / pdf，包含 renderer 与 engine
 pnpm build          # codec + 页面 bundle
 pnpm verify         # 校验 codec / presenter / sidecar 契约
 ```
@@ -90,8 +91,11 @@ pnpm verify         # 校验 codec / presenter / sidecar 契约
 pnpm build:docx
 pnpm build:docx-pro # 完整编辑器 + 执行点 + 页面
 pnpm build:xlsx-pro # Sheets 编辑器 + gateway 执行点 + 页面
-pnpm build:pptx-pro # Slides 编辑器 + 常驻 OpenedPptx + 执行点
-pnpm build:codec    # 只构建 ura.js
+pnpm build:pptx     # Slides 编辑器 + 引擎 + 页面
+pnpm build:pdf      # PDF.js 页面 + engine / text worker + pdfjs 资源
+pnpm test:pdf       # PDF 引擎 / 文本 / 分块 / 打印纯函数测试
+pnpm verify:pdf     # PDF SDK 清单 / 产物 / 静态命令 / 旧面残留
+pnpm build:codec    # 只构建旧 URA 插件（pdf 已不再走 URA）
 ```
 
 打包 / 安装：
@@ -152,7 +156,7 @@ git push origin v0.1.0
 
 - DOCX 仍需定期同步 GenOffice Docs 上游，并补齐部分 WorkStudio 系统命令；
 - PPTX 观众窗口是独立的 Document PiP 窗口，可手动拖到第二显示器；自动全屏/交换显示器需要宿主提供 screen API；
-- XLSX 大文件/公式流式加载仍按页面内策略处理。
+- XLSX：`xlsx` 走 wasm 流式打开（`meta + range`），无 wasm 时回退整份字节（≤64 MB）；页面关闭不弹保存确认，依赖自动保存与恢复副本。
 
 ## 许可
 

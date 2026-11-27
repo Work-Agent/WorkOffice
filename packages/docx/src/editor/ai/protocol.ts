@@ -1,3 +1,4 @@
+import { newBlockId } from '../editor/block-id'
 import type { Editor } from '@tiptap/core'
 import { REDACT_MARK } from './redact'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
@@ -1072,7 +1073,7 @@ function parseInline(element: Node, marks: PmMark[]): PmNode[] {
 function blockNode(type: string, attrs: Record<string, unknown>, content: PmNode[]): PmNode {
   const node: PmNode = {
     type,
-    attrs: { docxIndex: null, styleId: null, aiChanged: true, ...attrs },
+    attrs: { docxIndex: null, blockId: newBlockId(), styleId: null, aiChanged: true, ...attrs },
   }
   if (content.length > 0) node.content = content
   return node

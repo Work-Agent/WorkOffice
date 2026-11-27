@@ -1,65 +1,58 @@
 {
   "name": "@workstudio/plugin-xlsx",
-  "version": "0.1.1",
-  "description": "XLSX 编辑：GenOffice Sheets renderer + xlsx-gateway 写回",
+  "version": "0.2.0",
+  "description": "Excel 单个工作簿（.xlsx）：WorkStudio 新插件框架 + GenOffice Sheets 页面层。命令读写，字节只由引擎产生。",
   "author": "work-studio",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./ura": "./dist/ura.js"
+    "./workstudio": "./dist/engine.js"
   },
   "workstudio": {
     "id": "xlsx",
     "label": "Excel 表格",
     "icon": "table",
-    "page": "dist/page/index.html",
-    "apiVersion": 1
+    "pages": {
+      "content": "dist/page/index.html"
+    },
+    "claims": [
+      {
+        "extensions": [
+          "xlsx",
+          "xlsm",
+          "xltx"
+        ],
+        "priority": 100
+      }
+    ],
+    "skills": [
+      "skills/xlsx"
+    ]
   },
   "scripts": {
-    "build": "pnpm build:ura && pnpm build:page",
-    "build:ura": "esbuild src/ura.ts --bundle --format=esm --platform=node --target=node22 --external:electron --outfile=dist/ura.js",
-    "build:page": "vite build",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "build": "node scripts/sync-renderer.mjs && node scripts/build.mjs",
+    "build:engine": "node scripts/build.mjs --engine-only",
+    "build:page": "node scripts/sync-renderer.mjs && node scripts/build.mjs --page-only",
+    "typecheck": "node scripts/sync-renderer.mjs && tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:build": "node scripts/build.mjs && node --test tests/*.test.mjs",
+    "verify": "node scripts/verify.mjs && node scripts/editor-diff.mjs --check",
+    "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});for(const f of ['commands.json','api.json','api.d.ts'])fs.rmSync(f,{force:true})\"",
+    "sync": "node scripts/sync-renderer.mjs",
+    "fork:check": "node scripts/editor-diff.mjs --check",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@fluentui/react-icons": "^2.0.344",
-    "@noble/hashes": "^1.8.0",
-    "@univerjs/core": "0.25.1",
-    "@univerjs/data-validation": "0.25.1",
-    "@univerjs/engine-render": "0.25.1",
-    "@univerjs/find-replace": "0.25.1",
-    "@univerjs/preset-sheets-conditional-formatting": "0.25.1",
-    "@univerjs/preset-sheets-core": "0.25.1",
-    "@univerjs/preset-sheets-data-validation": "0.25.1",
-    "@univerjs/preset-sheets-drawing": "0.25.1",
-    "@univerjs/preset-sheets-filter": "0.25.1",
-    "@univerjs/preset-sheets-find-replace": "0.25.1",
-    "@univerjs/preset-sheets-note": "0.25.1",
-    "@univerjs/preset-sheets-sort": "0.25.1",
-    "@univerjs/preset-sheets-table": "0.25.1",
-    "@univerjs/sheets-filter": "0.25.1",
-    "@univerjs/themes": "0.25.1",
-    "buffer": "^6.0.3",
     "fast-xml-parser": "^5.3.4",
-    "fflate": "^0.8.2",
-    "jszip": "^3.10.2",
-    "numfmt": "^3.2.6",
-    "pdf-lib": "^1.17.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "rxjs": "^7.8.2"
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@work-studio/sdk": "file:../../../WorkStudio/packages/sdk",
     "esbuild": "^0.27.3",
-    "numfmt": "^3.2.6",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "zod": "^4.6.7"
+    "vite": "^7.3.1"
   }
 }

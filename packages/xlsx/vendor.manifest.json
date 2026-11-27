@@ -1,0 +1,15 @@
+{
+  "repo": "vendor/genoffice",
+  "url": "https://github.com/genspark-ai/genoffice.git",
+  "commit": "f6c2358c",
+  "sparse": [
+    "/packages/",
+    "/apps/sheets/native/xlsx-engine/",
+    "/apps/sheets/src/renderer/"
+  ],
+  "upstream": {
+    "renderer": "apps/sheets/src/renderer",
+    "wasmEngine": "apps/sheets/native/xlsx-engine",
+    "wasmOverlay": "rust/xlsx-engine/wasm.rs"
+  }
+}

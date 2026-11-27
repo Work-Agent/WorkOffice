@@ -44,6 +44,7 @@ import {
   type WatermarkSpec,
 } from '@genoffice/docx-engine'
 import type { Dispatch, SetStateAction } from 'react'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AiDocContent, OpenDocxResult } from '../shared/ipc'
 import {
   hfVariantsFromParsed,
@@ -64,6 +65,7 @@ import { docStyleCss } from './doc-style-css'
 import { setNoteNumFmts } from './note-format'
 import type { CompareEntry } from './editor/compare'
 import { blocksToPmDoc, pmDocOptions, pmDocToSavePlan, type PmNode } from './editor/convert'
+import { newBlockId } from './editor/block-id'
 import { TABLE_TRAILING_SKIP, setLazyMediaHashes } from './editor/extensions'
 import { FORMAT_MARKS, serializeMarks } from './editor/caret-marks'
 import { TRACK_IGNORE } from './editor/revisions'
@@ -114,6 +116,8 @@ export type PendingPdfExport = {
 export interface FileActionContext {
   editor: Editor | null
   doc: DocState | null
+  /** blockId -> docxIndex in the current saved file (null = new block) */
+  anchorMapRef: { current: Map<string, number | null> }
   dirtyRef: { current: boolean }
   saveInFlightRef: { current: boolean }
   saveIncompleteRef: { current: boolean }
@@ -298,13 +302,51 @@ function resetEditorHistory(editor: Editor): void {
 }
 
 /**
+ * After a successful save, refresh blockId -> docxIndex and mirror the legacy
+ * docxIndex attr for existing consumers. This transaction is not part of undo
+ * history: the PM document (and its undo stack) stays untouched.
+ */
+function syncAnchorMap(ctx: FileActionContext, reparsed: ParsedDocFull): void {
+  const editor = ctx.editor
+  if (!editor || editor.isDestroyed) return
+
+  const nodes: Array<{ node: ProseMirrorNode; pos: number }> = []
+  editor.state.doc.forEach((node, pos) => nodes.push({ node, pos }))
+
+  const visible = reparsed.blocks.filter((block) => !block.hidden)
+  const aligned = nodes.length === visible.length
+  const tr = editor.state.tr
+  const next = new Map<string, number | null>()
+  let changed = false
+
+  nodes.forEach(({ node, pos }, index) => {
+    const existing = typeof node.attrs.blockId === 'string' ? node.attrs.blockId : null
+    const blockId = existing ?? newBlockId()
+    const docxIndex = aligned ? (visible[index]?.docxIndex ?? null) : null
+    if (existing !== blockId || node.attrs.docxIndex !== docxIndex) {
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs, blockId, docxIndex })
+      changed = true
+    }
+    next.set(blockId, docxIndex)
+  })
+
+  ctx.anchorMapRef.current.clear()
+  for (const [blockId, docxIndex] of next) ctx.anchorMapRef.current.set(blockId, docxIndex)
+
+  if (changed) {
+    tr.setMeta('addToHistory', false)
+    editor.view.dispatch(tr)
+  }
+}
+
+/**
  * The formatting marks that would apply to text typed at the caret right now:
  * the selection's storedMarks when set, else the marks before it. Tiptap's
  * setMark() stores its result here on a collapsed cursor, which is how the
  * ribbon's font and size keep applying to the next keystroke.
  *
  * Snapshot as a serializeMarks() string rather than live Mark instances: a
- * save's setContent() swaps the document out from under them. FORMAT_MARKS
+ * document replacement swaps the document out from under them. FORMAT_MARKS
  * keeps annotation marks (comments, links, revisions) out — restoring those
  * would extend a comment or a revision onto text the user never marked.
  *
@@ -490,9 +532,15 @@ export async function loadFile(
     ctx.editor.storage.listNumbering.docDefaults = parsed.docDefaults
     ctx.editor.storage.listNumbering.defs = parsed.numbering
     applyDocLayoutSettings(ctx.editor, parsed)
+    ctx.anchorMapRef.current.clear()
     setContentPhased(
       phasedHostFor(ctx),
-      blocksToPmDoc(parsed.blocks, readSections(parsed), pmDocOptions(parsed)),
+      blocksToPmDoc(
+        parsed.blocks,
+        readSections(parsed),
+        pmDocOptions(parsed),
+        ctx.anchorMapRef.current,
+      ),
     )
     resetEditorHistory(ctx.editor)
     if (tier !== 'readOnly') focusDocumentStart(ctx.editor)
@@ -642,8 +690,14 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     applyDocLayoutSettings(ctx.editor, parsed)
     // a tail still streaming for the previous document must never land in this one
     cancelPhasedContent()
+    ctx.anchorMapRef.current.clear()
     ctx.editor.commands.setContent(
-      blocksToPmDoc(parsed.blocks, readSections(parsed), pmDocOptions(parsed)) as never,
+      blocksToPmDoc(
+        parsed.blocks,
+        readSections(parsed),
+        pmDocOptions(parsed),
+        ctx.anchorMapRef.current,
+      ) as never,
     )
     resetEditorHistory(ctx.editor)
     focusDocumentStart(ctx.editor)
@@ -759,7 +813,11 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
   const { doc, editor } = ctx
   if (!doc || !editor) return null
   const pmJson = editor.getJSON() as PmNode
-  const plan = pmDocToSavePlan(pmJson, doc.parsed.blocks)
+  const plan = pmDocToSavePlan(
+    pmJson,
+    doc.parsed.blocks,
+    ctx.anchorMapRef.current,
+  )
   // chart data edits patch the chart's own zip part, not the body XML
   const partXml: Record<string, string> = {}
   const partBinary: Record<string, string> = {}
@@ -1150,39 +1208,16 @@ async function saveOnce(
       // the converging complete save below toasts once.
       return true
     }
-    // Reload from saved bytes so docxIndex anchors point at the new file.
+    // Reload metadata from saved bytes, but keep the PM document and its undo
+    // history: blockId + anchorMap make the saved file coordinates independent
+    // from editor identity. Saving is persistence, not a document boundary.
     setLazyMediaHashes(reparsed.extras.lazyMediaHashes)
     setDocFontTable(reparsed.fontTable)
     editor.storage.listNumbering.styles = reparsed.styles
     editor.storage.listNumbering.docDefaults = reparsed.docDefaults
     editor.storage.listNumbering.defs = reparsed.numbering
     applyDocLayoutSettings(editor, reparsed)
-    const rebasedPm = blocksToPmDoc(reparsed.blocks, readSections(reparsed), pmDocOptions(reparsed))
-    let unchanged = false
-    try {
-      unchanged = editor.state.doc.eq(editor.schema.nodeFromJSON(rebasedPm))
-    } catch {
-      /* unrepresentable → rewrite */
-    }
-    // Equal doc: skip the rewrite so undo history, caret and scroll survive.
-    if (!unchanged) {
-      // The caret's marks — the ribbon's font/size live here as storedMarks and
-      // apply to whatever is typed next. setContent replaces the doc, so they
-      // have to travel with the selection or an autosave silently drops the
-      // font the user just picked (genoffice#2004). Both are read live, not
-      // before the await: a font chosen or a caret moved during the save must
-      // win, and the marks must belong to the position they are restored at.
-      const selectionPos = editor.state.selection.from
-      const caretMarks = caretMarksSnapshot(editor)
-      editor.commands.setContent(rebasedPm as never)
-      resetEditorHistory(editor)
-      const chain = editor
-        .chain()
-        .setTextSelection(Math.min(selectionPos, editor.state.doc.content.size))
-      if (!auto) chain.scrollIntoView()
-      chain.run()
-      restoreMarksAfterDocRewrite(editor, caretMarks)
-    }
+    syncAnchorMap(ctx, reparsed)
     ctx.setDocCss(docStyleCss(reparsed))
     ctx.setDoc((prev) =>
       prev

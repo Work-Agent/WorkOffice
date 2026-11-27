@@ -1,14 +1,13 @@
-// ─── DOCX 插件页面入口 ──────────────────────────────────────────────
+// ─── docx-pro 页面入口（WorkStudio SDK） ───────────────────────────────
 //
-// 页面只做三件事：从页面会话取字节、安装 window.desktop 宿主适配层、
-// 启动 GenOffice Docs 渲染器。文档生命周期由插件注册入口与页面会话负责。
+// 页面只做：取 ref → 取字节 → 装 window.desktop 适配层 → 启动编辑器
+// → 登记页面租约 → 处理 Agent 请求 / 保存回执。
+//
+// 不订阅 workspace、不管理标签 / 文件列表；这些归宿主 shell。
 
-import {
-  docxInfoOf,
-  hashOf,
-  installDocxHost,
-} from './host'
-import type { PageSessionInfo } from './env'
+import { installDocxHost, hashOf } from './host'
+import { installPageQueue } from './lease'
+import type { LoadResult, PageRequest } from './env'
 
 function fail(message: string): void {
   const boot = document.querySelector<HTMLElement>('.ws-boot')
@@ -22,20 +21,24 @@ function applyTheme(theme: 'light' | 'dark'): void {
   document.documentElement.style.colorScheme = theme
 }
 
-async function currentTheme(): Promise<'light' | 'dark'> {
+async function watchTheme(): Promise<void> {
   try {
-    const theme = await window.appBridge?.peek<string>('/theme')
-    if (theme === 'dark' || theme === 'light') return theme
+    const snapshot = await window.workStudio.subscribe('shell', 'appearance')
+    const theme = (snapshot as { theme?: unknown } | null)?.theme
+    applyTheme(theme === 'dark' ? 'dark' : 'light')
   } catch {
-    /* 宿主未就绪时按系统主题兜底 */
+    applyTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
   }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light'
+  window.workStudio.onUpdate((update) => {
+    if (update.domain !== 'shell' || update.resource !== 'appearance') return
+    if (update.type !== 'snapshot' && update.type !== 'patch') return
+    const theme = (update.data as { theme?: unknown }).theme
+    if (theme === 'light' || theme === 'dark') applyTheme(theme)
+  })
 }
 
 async function waitForEditor(): Promise<void> {
-  const deadline = Date.now() + 20_000
+  const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
     if (document.querySelector('.app')) return
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -43,42 +46,74 @@ async function waitForEditor(): Promise<void> {
   throw new Error('编辑器初始化超时')
 }
 
+async function loadDocument(ref: string): Promise<LoadResult> {
+  const result = await window.workStudio.command<LoadResult>('docx-pro', 'docx-pro', 'load', {
+    ref,
+  })
+  if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+  if (result.data.bytes instanceof Uint8Array) return result.data
+  // 极端情况下 invoke 没有保留 typed array：退到 base64。
+  const fallback = await window.workStudio.command<LoadResult>('docx-pro', 'docx-pro', 'load', {
+    ref,
+    base64: true,
+  })
+  if (!fallback.ok) throw new Error(`${fallback.error.code}: ${fallback.error.message}`)
+  return fallback.data
+}
+
 async function boot(): Promise<void> {
-  const sessionId = new URLSearchParams(location.search).get('session')
-  if (!sessionId) {
-    fail('缺少页面会话：请从 WorkStudio 资源面板打开 DOCX 文档')
+  const params = new URLSearchParams(location.search)
+  const ref = params.get('ref') ?? ''
+  const locator = params.get('locator') ?? ''
+  if (!ref) {
+    fail('缺少 ref：请从 WorkStudio 资源面板打开 DOCX 文档')
     return
   }
 
   try {
-    applyTheme(await currentTheme())
-    const info = await window.extension.ura.page.get<PageSessionInfo>(sessionId)
-    const { bytes, name } = docxInfoOf(info)
+    await watchTheme()
+    const loaded = await loadDocument(ref)
+    const bytes = loaded.bytes instanceof Uint8Array
+      ? loaded.bytes
+      : new Uint8Array(
+          atob(loaded.data ?? '')
+            .split('')
+            .map((char) => char.charCodeAt(0)),
+        )
+    const name = loaded.name || 'document.docx'
     const blobUrl = URL.createObjectURL(
       new Blob([bytes as unknown as BlobPart], {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       }),
     )
-
-    installDocxHost({
-      sessionId,
-      ref: info.ref,
+    const pageId = crypto.randomUUID()
+    const host = installDocxHost({
+      ref,
+      pageId,
       name,
       bytes,
       blobUrl,
-      hash: hashOf(bytes),
+      hash: loaded.hash || hashOf(bytes),
+      version: loaded.hash || hashOf(bytes),
+      epoch: 0,
     })
+    const queue = installPageQueue({ ref, pageId, host, locator })
 
-    // 页面层源码已 fork 到 src/editor；这里只负责会话数据与宿主边界。
+    const attached = await window.workStudio.command<{ pending?: PageRequest[] }>(
+      'docx-pro',
+      'docx-pro',
+      'attach',
+      { ref, pageId },
+    )
+    if (!attached.ok) throw new Error(`${attached.error.code}: ${attached.error.message}`)
+    queue.touch()
+
     await import('../editor/main')
     await waitForEditor()
-    window.extension.bus.loaded()
-    window.extension.bus.send({ type: 'dirty', dirty: false })
+    void queue.handlePending(attached.data?.pending ?? [])
     document.querySelector<HTMLElement>('.ws-boot')?.remove()
   } catch (error) {
-    fail(
-      `DOCX 打开失败：${error instanceof Error ? error.message : String(error)}`,
-    )
+    fail(`DOCX 打开失败：${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

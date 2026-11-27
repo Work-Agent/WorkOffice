@@ -10,13 +10,30 @@
 // 只复制 package.json 与 dist/；源码、node_modules、测试不进入宿主。
 // 新机制按目录扫描插件，不需要 npm install。
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const pluginIds = ['docx', 'office-docx', 'xlsx', 'pptx', 'docx-pro', 'xlsx-pro', 'pptx-pro', 'pdf']
+// 默认装全部插件：扫描 packages 下声明了 workstudio 的包。
+const pluginIds = []
+for (const entry of readdirSync(join(root, 'packages'), { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue
+  const pkg = JSON.parse(
+    readFileSync(join(root, 'packages', entry.name, 'package.json'), 'utf8'),
+  )
+  if (pkg.workstudio) pluginIds.push(entry.name)
+}
+pluginIds.sort()
 
 // WorkStudio 0.3+ 的插件根：<profile>/data/plugins（profile = appData/<产品名>）。
 // 0.2 及更早用的是 <profile>/plugins，两代都保留可写路径，靠 --target 覆盖。
@@ -44,6 +61,8 @@ const args = process.argv.slice(2)
 const onlyArg = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined
 if (onlyArg) {
   const wanted = onlyArg.split(',').map((id) => id.trim()).filter(Boolean)
+  for (const id of wanted)
+    if (!pluginIds.includes(id)) throw new Error(`没有这个插件：packages/${id}`)
   pluginIds.splice(0, pluginIds.length, ...wanted)
 }
 const targetArg = args.includes('--target') ? args[args.indexOf('--target') + 1] : undefined
@@ -62,11 +81,26 @@ function checkManifest(id, pkgRoot) {
   const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
   const ws = pkg.workstudio ?? {}
   if (ws.id !== id) throw new Error(`${id}: workstudio.id 必须为 "${id}"`)
+  if (!pkg.version) throw new Error(`${id}: 缺少 version`)
+
+  // WorkStudio SDK 新插件：exports['./workstudio'] + pages.content + commands.json
+  if (pkg.exports?.['./workstudio']) {
+    if (!ws.pages?.content) throw new Error(`${id}: 缺少 workstudio.pages.content`)
+    for (const file of [pkg.exports['./workstudio'], ws.pages.content, 'commands.json']) {
+      if (!existsSync(join(pkgRoot, file))) throw new Error(`${id}: 文件不存在 ${file}`)
+    }
+    for (const dir of ws.skills ?? []) {
+      if (typeof dir !== 'string' || !existsSync(join(pkgRoot, dir)))
+        throw new Error(`${id}: 技能目录不存在 ${String(dir)}`)
+    }
+    return pkg
+  }
+
+  // 旧 URA 插件
   if (ws.apiVersion !== 1 && ws.apiVersion !== 2)
     throw new Error(`${id}: workstudio.apiVersion 必须为 1 或 2`)
   if (ws.apiVersion === 2 && ws.write === 'plan' && !ws.engine?.exec)
     throw new Error(`${id}: write: 'plan' 必须声明 engine.exec`)
-  if (!pkg.version) throw new Error(`${id}: 缺少 version`)
   const ura = pkg.exports?.['./ura']
   if (!ura) throw new Error(`${id}: exports["./ura"] 缺失`)
   for (const file of [ura, ws.page]) {
@@ -96,9 +130,12 @@ for (const id of pluginIds) {
   mkdirSync(pluginTarget, { recursive: true })
   cpSync(join(pluginSource, 'package.json'), join(pluginTarget, 'package.json'))
   cpSync(join(pluginSource, 'dist'), join(pluginTarget, 'dist'), { recursive: true })
+  for (const file of ['commands.json', 'api.json', 'api.d.ts']) {
+    if (existsSync(join(pluginSource, file))) cpSync(join(pluginSource, file), join(pluginTarget, file))
+  }
   for (const skill of pkg.workstudio?.skills ?? []) {
-    if (skill?.dir)
-      cpSync(join(pluginSource, skill.dir), join(pluginTarget, skill.dir), { recursive: true })
+    const dir = typeof skill === 'string' ? skill : skill?.dir
+    if (dir) cpSync(join(pluginSource, dir), join(pluginTarget, dir), { recursive: true })
   }
   console.log(`installed ${id}@${pkg.version} → ${pluginTarget}`)
 }

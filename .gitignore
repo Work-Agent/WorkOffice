@@ -158,4 +158,4 @@ release/
 packages/xlsx-pro/build/
 
 # PDF 插件 dev / build 期间生成的 pdfjs 静态资源
-packages/pdf/src/page/pdfjs/
+packages/pdf/src/page/assets/pdfjs/

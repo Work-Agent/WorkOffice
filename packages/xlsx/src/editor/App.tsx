@@ -62,6 +62,7 @@ import {
 } from './cell-font-fallback'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
+import { bumpDocRev, pageTokens } from './page-tokens'
 import { createSaveGate, shouldRunSaveTick } from './save-scheduler'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
@@ -1530,6 +1531,17 @@ export function App({
           return
         }
         const state = lazyWorkbookRef.current
+        // docRev：内容型 mutation 推进页面模型身份。视图类操作（缩放 / 网格线 /
+        // 冻结 / 反向）不影响单元格坐标，不得计进去，否则 agent 会被无关操作打废。
+        if (
+          event.id !== SET_FROZEN_MUTATION &&
+          event.id !== TOGGLE_GRIDLINES_MUTATION &&
+          event.id !== SET_RIGHT_TO_LEFT_MUTATION &&
+          event.id !== SET_ZOOM_OPERATION &&
+          event.id !== SET_ZOOM_COMMAND
+        ) {
+          bumpDocRev()
+        }
         if (!state) {
           // Demo mode journals nothing, but chart↔data sync still applies.
           if (event.id === SET_RANGE_VALUES_MUTATION) {
@@ -3540,17 +3552,55 @@ export function App({
     return installSheetsMcpBridge({
       hasWorkbook: () => handlers.current?.hasWorkbook() ?? false,
       context: () => handlers.current?.context(),
-      readCells: (addresses, sheetId) => handlers.current?.readCells(addresses, sheetId) ?? {},
+      readCells: (addresses: string[], sheetId?: string) =>
+        handlers.current?.readCells(addresses, sheetId) ?? {},
       sheets: () => handlers.current?.sheets() ?? [],
-      focusSheet: (sheetId, address) => handlers.current?.focusSheet(sheetId, address),
-      applyOps: async (ops, dryRun) =>
-        (await handlers.current?.applyOps(ops, dryRun)) ?? { ok: false, reason: 'not ready' },
+      focusSheet: (sheetId: string, address?: string) =>
+        handlers.current?.focusSheet(sheetId, address),
+      applyOps: async (ops: unknown[], dryRun: boolean) =>
+        (await handlers.current?.applyOps(ops as never, dryRun)) ?? {
+          ok: false,
+          reason: 'not ready',
+        },
       saveTo: async (path, overwrite) =>
         (await handlers.current?.saveTo(path, overwrite)) ?? {
           ok: false,
           error: 'the spreadsheet is not ready',
         },
     })
+  }, [])
+  useEffect(() => {
+    const handlers = mcpSheetHandlersRef
+    window.__xlsxPro = {
+      hasWorkbook: () => handlers.current?.hasWorkbook() ?? false,
+      context: () => handlers.current?.context(),
+      readCells: (addresses: string[], sheetId?: string) =>
+        handlers.current?.readCells(addresses, sheetId) ?? {},
+      sheets: () => handlers.current?.sheets() ?? [],
+      focusSheet: (sheetId: string, address?: string) =>
+        handlers.current?.focusSheet(sheetId, address),
+      applyOps: async (ops: unknown[], dryRun: boolean) =>
+        (await handlers.current?.applyOps(ops as never, dryRun)) ?? {
+          ok: false,
+          reason: 'the spreadsheet is not ready',
+        },
+      save: () => handleSaveRef.current('save', true),
+      // 页面内新鲜度令牌（I13）：docRev = 模型事务计数，structureEpoch = 结构修订号。
+      // 它们不进 presenter.data，只供 agent 代理做 op 级校验。
+      docRev: () => pageTokens().docRev,
+      structureEpoch: () => pageTokens().structureEpoch,
+      /// 严格策略的回滚：agent 批次已应用但落盘失败时撤销该撤销单元。
+      undo: () => {
+        const workbook = univerRef.current?.univerAPI.getActiveWorkbook()
+        if (!workbook) return false
+        workbook.undo()
+        return true
+      },
+      undoDepth: () => undoStackDepth(univerRef.current),
+    }
+    return () => {
+      delete window.__xlsxPro
+    }
   }, [])
   /// Re-renders the floating visuals after a journal mutation (edits and
   /// their undo/redo closures share it).

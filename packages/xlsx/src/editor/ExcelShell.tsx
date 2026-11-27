@@ -554,9 +554,11 @@ export function ExcelShell({
   const [chartTextTarget, setChartTextTarget] = useState<ChartTextTarget | null>(null)
   const onCommandRef = useRef(onCommand)
   const onIsCellEditingRef = useRef(onIsCellEditing)
+  const onSaveRef = useRef(onSave)
   const openingWorkbookRef = useRef(openingWorkbook)
   onCommandRef.current = onCommand
   onIsCellEditingRef.current = onIsCellEditing
+  onSaveRef.current = onSave
   openingWorkbookRef.current = openingWorkbook
   const dispatchCommand = (command: string): void => {
     if (command === 'format-cells') setShowFormatCells(true)
@@ -615,6 +617,20 @@ export function ExcelShell({
     // dialogs, Univer's find/replace and formula bar) never trigger these.
     const onKeyDown = (event: KeyboardEvent): void => {
       if (openingWorkbookRef.current) return
+      // WorkStudio 的壳层不一定把 Ctrl/Cmd+S 作为 menu action 转发进页面；
+      // 页面自己接住它，保证 QAT Save / 快捷键 / 自动保存走同一条 handleSave。
+      if (
+        event.code === 'KeyS' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        if (isModalOpen()) return
+        event.preventDefault()
+        event.stopPropagation()
+        onSaveRef.current()
+        return
+      }
       const action = resolveGlobalShortcut(event, {
         isMac: IS_MAC,
         modalOpen: isModalOpen(),

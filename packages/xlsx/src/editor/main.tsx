@@ -51,22 +51,20 @@ async function loadCellFonts(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const sessionId = new URLSearchParams(location.search).get('session')
+  const boot = window.__xlsxProBoot
+  const sessionId = boot?.sessionId ?? new URLSearchParams(location.search).get('ref')
   if (!sessionId) {
-    fail('缺少页面会话：请从 WorkStudio 资源面板打开 XLSX 工作簿')
+    fail('缺少 ?ref=：请从工作区打开一个 .xlsx 文件')
+    return
+  }
+  if (!window.__xlsxPlus) {
+    fail('页面桥未就绪：请从 WorkStudio 打开该文件')
     return
   }
 
   let data: XlsxPageData | null = null
-  let theme: 'light' | 'dark' = 'light'
   try {
-    const info = await window.extension.ura.page.get<{
-      id: string
-      data: XlsxPageData
-    }>(sessionId)
-    data = info.data
-    theme = await readHostTheme()
-    applyTheme(theme)
+    data = boot?.data ?? null
   } catch (error) {
     fail(
       `XLSX 打开失败：${error instanceof Error ? error.message : String(error)}`,
@@ -77,6 +75,7 @@ async function bootstrap(): Promise<void> {
     fail('XLSX 页面数据为空')
     return
   }
+  applyTheme(await readHostTheme())
 
   const lang: Lang = 'zh'
   setModuleLang(lang)
@@ -86,17 +85,15 @@ async function bootstrap(): Promise<void> {
   await installWorkStudioHost({
     sessionId,
     data,
-    onDirty: (dirty) =>
-      window.extension.bus.send({ type: 'dirty', dirty }),
-    onToast: (message) => console.info('[xlsx]', message),
+    bytes: window.__xlsxProBoot?.bytes,
+    epoch: window.__xlsxProBoot?.epoch ?? 0,
+    onDirty: (dirty) => window.__xlsxPlus?.setDirty(dirty),
+    onToast: (message) => window.__xlsxPlus?.toast(message),
+    onReceipt: () => undefined,
   })
 
-  // 主题变化：WorkStudio bus → 页面 UI（Univer 自己由 App 处理）
-  window.extension.bus.on((message) => {
-    if (message.type === 'theme') {
-      applyTheme(message.theme === 'dark' ? 'dark' : 'light')
-    }
-  })
+  // 主题变化：宿主 `shell/appearance` → 页面 UI（Univer 自己由 App 处理）
+  window.__xlsxPlus?.onTheme(applyTheme)
 
   await loadCellFonts()
   ReactDOM.createRoot(root as HTMLElement).render(
@@ -104,8 +101,7 @@ async function bootstrap(): Promise<void> {
       <App queuedWorkbookAtBoot={false} />
     </LocaleProvider>,
   )
-  window.extension.bus.loaded()
-  window.extension.bus.send({ type: 'dirty', dirty: false })
+  window.__xlsxPlus?.setDirty(false)
 }
 
 void bootstrap()

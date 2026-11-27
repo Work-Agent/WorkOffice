@@ -10,6 +10,7 @@ import {
   createBufferEntrySource,
   planCellEditsToXlsx,
 } from '@genoffice/xlsx-gateway/gateway/xlsx-gateway'
+import type { XlsxSaveRequest } from '@xlsx/shared/save-request'
 
 function resolveSheetName(
   sheetId: string,
@@ -21,11 +22,11 @@ function resolveSheetName(
   return name
 }
 
-export async function saveWorkbookEdits(
-  source: Uint8Array,
-  request: any,
-  file: any,
-): Promise<{ bytes: Uint8Array; file: any; touchedEntries: string[] }> {
+/// 把 App 的保存请求映射成 gateway 的具名参数（sheet 一律用名称）。
+///
+/// 页面路径（`kind:'save'`，请求进执行点）与回退路径（`kind:'bytes'`，页面自己
+/// 产字节）**共用这一份映射**：任何字段只在一条路径上被映射，都会变成静默丢数据。
+export function planWorkbookSave(request: any, file: any): XlsxSaveRequest {
   const addedSheetNames = new Map<string, string>()
   const duplicateSources = new Map<string, string>()
   const renames: Array<{ sheetName: string; newName: string }> = []
@@ -231,38 +232,80 @@ export async function saveWorkbookEdits(
     relayout: update.relayout,
   }))
 
+  return {
+    edits,
+    structuralOps,
+    ...(sheetPlan === undefined ? {} : { sheetPlan }),
+    ...(request.chartEdits?.length ? { chartEdits: request.chartEdits } : {}),
+    ...(filterStates.length > 0 ? { filterStates } : {}),
+    ...(hyperlinkEdits.length > 0 ? { hyperlinkEdits } : {}),
+    ...(cfStates.length > 0 ? { cfStates } : {}),
+    ...(dvStates.length > 0 ? { dvStates } : {}),
+    ...(sheetProtections.length > 0 ? { sheetProtections } : {}),
+    ...(request.definedNamesState ? { definedNamesState: request.definedNamesState } : {}),
+    ...(visualAdditions.length > 0 ? { visualAdditions } : {}),
+    ...(pageSetupStates.length > 0 ? { pageSetupStates } : {}),
+    ...(noteStates.length > 0 ? { noteStates } : {}),
+    ...(tableAdditions.length > 0 ? { tableAdditions } : {}),
+    ...(pivotAdditions.length > 0 ? { pivotAdditions } : {}),
+    ...(request.pivotCacheRefreshPaths?.length
+      ? { pivotCacheRefreshPaths: request.pivotCacheRefreshPaths }
+      : {}),
+    ...(pivotRefreshUpdates.length > 0 ? { pivotRefreshUpdates } : {}),
+    ...(request.visualEdits?.length ? { visualEdits: request.visualEdits } : {}),
+    ...(sparklineAdditions.length > 0 ? { sparklineAdditions } : {}),
+    ...(formulaValues.length > 0 ? { formulaValues } : {}),
+    ...(request.themeState ? { themeState: request.themeState } : {}),
+    ...(request.workbookProtectionState
+      ? { workbookProtectionState: request.workbookProtectionState }
+      : {}),
+    ...(protectedRangeStates.length > 0 ? { protectedRangeStates } : {}),
+    ...(bulkConstantFills.length > 0 ? { bulkConstantFills } : {}),
+    ...(tabColorStates.length > 0 ? { tabColorStates } : {}),
+    ...(tableEdits.length > 0 ? { tableEdits } : {}),
+    ...(cellImageAdditions.length > 0 ? { cellImageAdditions } : {}),
+  }
+}
+
+/// 回退路径：页面自己产整份字节（`plan { kind:'bytes' }`）。
+export async function saveWorkbookEdits(
+  source: Uint8Array,
+  request: any,
+  file: any,
+): Promise<{ bytes: Uint8Array; file: any; touchedEntries: string[] }> {
+  const plan = planWorkbookSave(request, file)
   const sourceBuffer = Buffer.from(source)
   const mutation = await assembleWithJsZip(
     sourceBuffer,
     await planCellEditsToXlsx(
       await createBufferEntrySource(sourceBuffer),
-      edits,
-      structuralOps,
-      request.chartEdits ?? [],
-      sheetPlan,
-      filterStates,
-      hyperlinkEdits,
-      cfStates,
-      dvStates,
-      sheetProtections,
-      request.definedNamesState ?? null,
-      visualAdditions,
-      pageSetupStates,
-      noteStates,
-      tableAdditions,
-      pivotAdditions,
-      request.pivotCacheRefreshPaths ?? [],
-      pivotRefreshUpdates,
-      request.visualEdits ?? [],
-      sparklineAdditions,
-      formulaValues,
-      request.themeState ?? null,
-      request.workbookProtectionState ?? null,
-      protectedRangeStates,
-      bulkConstantFills,
-      tabColorStates,
-      tableEdits,
-      cellImageAdditions,
+      plan.edits,
+      plan.structuralOps,
+      plan.chartEdits ?? [],
+      plan.sheetPlan,
+      plan.filterStates ?? [],
+      plan.hyperlinkEdits ?? [],
+      plan.cfStates ?? [],
+      plan.dvStates ?? [],
+      plan.sheetProtections ?? [],
+      plan.definedNamesState ?? null,
+      plan.visualAdditions ?? [],
+      plan.pageSetupStates ?? [],
+      plan.noteStates ?? [],
+      plan.tableAdditions ?? [],
+      plan.pivotAdditions ?? [],
+      plan.pivotCacheRefreshPaths ?? [],
+      plan.pivotRefreshUpdates ?? [],
+      plan.visualEdits ?? [],
+      plan.sparklineAdditions ?? [],
+      plan.formulaValues ?? [],
+      plan.themeState ?? null,
+      plan.workbookProtectionState ?? null,
+      plan.protectedRangeStates ?? [],
+      plan.bulkConstantFills ?? [],
+      plan.tabColorStates ?? [],
+      plan.tableEdits ?? [],
+      plan.cellImageAdditions ?? [],
     ),
   )
 

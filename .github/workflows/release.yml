@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install wasm target
+        run: rustup target add wasm32-wasip1
+
       - name: Validate release tag
         run: |
           for id in docx xlsx pptx pdf; do
@@ -54,6 +57,9 @@ jobs:
 
       - name: Verify URA contract
         run: pnpm verify
+
+      - name: Verify xlsx
+        run: pnpm --filter @workstudio/plugin-xlsx verify
 
       - name: Pack plugin zips
         run: pnpm pack:plugins

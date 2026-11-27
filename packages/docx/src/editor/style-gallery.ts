@@ -1,41 +1,10 @@
 import type { Node as PmNode } from '@tiptap/pm/model'
 import type { CSSProperties } from 'react'
-import type { DocDefaults, StyleInfo } from '@genoffice/docx-engine'
+import type { DocDefaults, StyleInfo, StyleUpsert } from '@genoffice/docx-engine'
 import type { StringKey, TFunc } from './i18n/locale'
 import { cssFontFamily } from './line-metrics'
 
 export type StyleMap = ReadonlyMap<string, StyleInfo>
-
-/** What the gallery lists when no document styles are known (tests, no open document) */
-export const FALLBACK_STYLES: StyleMap = new Map<string, StyleInfo>(
-  [
-    { styleId: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true, qFormat: true },
-    {
-      styleId: 'Heading1',
-      name: 'heading 1',
-      type: 'paragraph',
-      headingLevel: 1,
-      qFormat: true,
-      uiPriority: 9,
-    },
-    {
-      styleId: 'Heading2',
-      name: 'heading 2',
-      type: 'paragraph',
-      headingLevel: 2,
-      qFormat: true,
-      uiPriority: 9,
-    },
-    {
-      styleId: 'Heading3',
-      name: 'heading 3',
-      type: 'paragraph',
-      headingLevel: 3,
-      qFormat: true,
-      uiPriority: 9,
-    },
-  ].map((s) => [s.styleId, s as StyleInfo]),
-)
 
 const byPriorityThenName = (a: StyleInfo, b: StyleInfo): number =>
   (a.uiPriority ?? 0) - (b.uiPriority ?? 0) ||
@@ -44,32 +13,152 @@ const byPriorityThenName = (a: StyleInfo, b: StyleInfo): number =>
 const listable = (info: StyleInfo): boolean =>
   (info.type === 'paragraph' || info.type === 'character') && !info.linkedCharShell
 
-/**
- * Word's Quick Style gallery: every w:qFormat style in w:uiPriority order (name
- * breaks ties); a semiHidden one joins once the document uses it (Heading 3+).
- * The default paragraph style is always listed so body text stays reachable.
- */
-export function quickStyleEntries(styles: StyleMap, used: ReadonlySet<string>): StyleInfo[] {
-  const out: StyleInfo[] = []
-  for (const info of styles.values()) {
-    if (!listable(info)) continue
-    const isDefault = info.type === 'paragraph' && info.isDefault
-    if (!info.qFormat && !isDefault) continue
-    if (info.semiHidden && !isDefault && !(info.unhideWhenUsed && used.has(info.styleId))) continue
-    out.push(info)
-  }
-  // documents without any quick-style flags (converters, old generators) fall back to the visible styles
-  if (out.every((s) => !s.qFormat)) {
-    for (const info of styles.values()) {
-      if (listable(info) && !info.semiHidden && !out.includes(info)) out.push(info)
-    }
-  }
-  return out.sort(byPriorityThenName)
+interface CanonicalStyleSpec {
+  id: string
+  name: RegExp
+  level?: number
+  /** Word's built-in size (half-points): card preview, and the definition written on first apply */
+  sizeHalfPoints: number
+  /** Word's built-in w:spacing w:before (twips), same purpose */
+  spaceBeforeTwips: number
 }
 
-/** Styles pane "All styles": every paragraph and character style, same order */
+/**
+ * Minimum standard paragraph styles every .docx must expose: body text and
+ * headings 1-4, in this order. Word's own Quick Style gallery starts with them,
+ * and a user has to be able to set a heading without first creating a style —
+ * so a document that does not define one still gets a card for it.
+ */
+const BASELINE_QUICK_STYLES: CanonicalStyleSpec[] = [
+  { id: 'Normal', name: /^normal$/i, sizeHalfPoints: 22, spaceBeforeTwips: 0 },
+  { id: 'Heading1', name: /^heading\s*1$/i, level: 1, sizeHalfPoints: 32, spaceBeforeTwips: 240 },
+  { id: 'Heading2', name: /^heading\s*2$/i, level: 2, sizeHalfPoints: 28, spaceBeforeTwips: 240 },
+  { id: 'Heading3', name: /^heading\s*3$/i, level: 3, sizeHalfPoints: 26, spaceBeforeTwips: 160 },
+  { id: 'Heading4', name: /^heading\s*4$/i, level: 4, sizeHalfPoints: 24, spaceBeforeTwips: 160 },
+]
+
+/** Word's built-in definition of a baseline style, for a document that lacks it */
+function builtInBaselineStyle(spec: CanonicalStyleSpec): StyleInfo {
+  if (spec.level === undefined)
+    return { styleId: spec.id, name: spec.id, type: 'paragraph', isDefault: true, qFormat: true }
+  return {
+    styleId: spec.id,
+    name: `heading ${spec.level}`,
+    type: 'paragraph',
+    headingLevel: spec.level,
+    qFormat: true,
+    uiPriority: 9,
+    display: {
+      bold: true,
+      sizeHalfPoints: spec.sizeHalfPoints,
+      spaceBeforeTwips: spec.spaceBeforeTwips,
+      spaceAfterTwips: 120,
+    },
+  }
+}
+
+/** What the gallery lists when no document styles are known (tests, no open document) */
+export const FALLBACK_STYLES: StyleMap = new Map<string, StyleInfo>(
+  BASELINE_QUICK_STYLES.map((spec) => [spec.id, builtInBaselineStyle(spec)]),
+)
+
+const isBaselineSemantic = (info: StyleInfo): boolean =>
+  info.styleId === 'Normal' ||
+  (info.type === 'paragraph' &&
+    ((info.headingLevel !== undefined && info.headingLevel >= 1 && info.headingLevel <= 4) ||
+      /^heading\s*[1-4]$/i.test(info.name)))
+
+/**
+ * The five styles that must show in every document, in a fixed order: the
+ * document's own definition when it has one, Word's built-in card otherwise.
+ * Everything else in the gallery comes from the document itself.
+ */
+export function canonicalStyleEntries(styles: StyleMap): StyleInfo[] {
+  const out: StyleInfo[] = []
+  const seen = new Set<string>()
+  const push = (info: StyleInfo | undefined): void => {
+    if (!info || seen.has(info.styleId)) return
+    seen.add(info.styleId)
+    out.push(info)
+  }
+
+  for (const spec of BASELINE_QUICK_STYLES) {
+    let info: StyleInfo | undefined
+    if (spec.level !== undefined) {
+      const id = headingStyleId(styles, spec.level)
+      if (id) info = styles.get(id)
+    } else {
+      info = styles.get(spec.id)
+      if (!info)
+        info = [...styles.values()].find(
+          (candidate) => candidate.type === 'paragraph' && candidate.isDefault,
+        )
+    }
+    push(info ?? builtInBaselineStyle(spec))
+  }
+  return out
+}
+
+/**
+ * Definition to write to styles.xml when a card for a baseline style the
+ * document does not define is applied. Applying the card then materializes the
+ * style (Word's latent styles behave the same way) instead of leaving a heading
+ * paragraph whose w:pStyle nothing resolves on the next open.
+ *
+ * Null for a style the document already defines, for a character style, and for
+ * Normal — body text is applied by clearing w:pStyle, which is what it means.
+ */
+export function baselineStyleUpsert(
+  info: StyleInfo,
+  styles: StyleMap | undefined,
+): StyleUpsert | null {
+  const level = info.headingLevel
+  if (info.type !== 'paragraph' || !level || styles?.has(info.styleId)) return null
+  const parent = defaultParagraphStyleId(styles) ?? (styles?.has('Normal') ? 'Normal' : undefined)
+  const size = info.display?.sizeHalfPoints ?? 22
+  return {
+    styleId: info.styleId,
+    type: 'paragraph',
+    name: info.name,
+    ...(parent ? { basedOn: parent, next: parent } : {}),
+    quickFormat: true,
+    rPr: { bold: true, sizeHalfPoints: size },
+    pPr: {
+      outlineLevel: level,
+      keepNext: true,
+      spaceBeforeTwips: info.display?.spaceBeforeTwips ?? (level <= 2 ? 240 : 160),
+      spaceAfterTwips: info.display?.spaceAfterTwips ?? 120,
+    },
+  }
+}
+
+export function quickStyleEntries(styles: StyleMap, used: ReadonlySet<string>): StyleInfo[] {
+  const baseline = canonicalStyleEntries(styles)
+  const baseIds = new Set(baseline.map((info) => info.styleId))
+  const extras = [...styles.values()].filter(
+    (info) =>
+      listable(info) &&
+      !baseIds.has(info.styleId) &&
+      !isBaselineSemantic(info) &&
+      (info.qFormat ||
+        (info.type === 'paragraph' && info.isDefault) ||
+        (info.semiHidden && info.unhideWhenUsed && used.has(info.styleId))),
+  )
+  extras.sort(byPriorityThenName)
+  return [...baseline, ...extras]
+}
+
+/**
+ * Styles pane "All styles": the baseline cards first, then every other
+ * paragraph and character style (Word lists latent built-ins here too).
+ */
 export function allStyleEntries(styles: StyleMap): StyleInfo[] {
-  return [...styles.values()].filter(listable).sort(byPriorityThenName)
+  const baseline = canonicalStyleEntries(styles)
+  const baseIds = new Set(baseline.map((info) => info.styleId))
+  const rest = [...styles.values()]
+    .filter((info) => listable(info) && !baseIds.has(info.styleId))
+    .sort(byPriorityThenName)
+  return [...baseline, ...rest]
 }
 
 /** The paragraph style Word applies to unstyled paragraphs (w:default), by id */
