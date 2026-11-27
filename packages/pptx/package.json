@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-pptx",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "PowerPoint 演示文稿（.pptx）：WorkStudio SDK 文档页插件。打开才写，助手写经页面队列。",
   "author": "work-studio",
   "license": "Apache-2.0",

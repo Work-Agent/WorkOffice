@@ -8,6 +8,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -142,13 +143,30 @@ check('页面通道只读 op', async () => {
 check('wasm 产物', () => {
   const wasm = join(root, 'dist/xlsx-engine.wasm')
   if (!existsSync(wasm)) {
-    console.log('  · 跳过：dist/xlsx-engine.wasm 未构建（build:wasm）')
+    assert.ok(
+      process.env['XLSX_REQUIRE_WASM'] !== '1',
+      '缺少 dist/xlsx-engine.wasm：XLSX_REQUIRE_WASM=1 时必须先 node scripts/fetch-wasm.mjs',
+    )
+    console.log('  · 跳过：dist/xlsx-engine.wasm 未构建（node scripts/fetch-wasm.mjs）')
     return
   }
   const manifest = JSON.parse(readFileSync(join(root, 'dist/xlsx-engine.json'), 'utf8'))
   const bytes = readFileSync(wasm)
   assert.equal(manifest.size, bytes.byteLength)
   assert.match(manifest.sha256, /^[0-9a-f]{64}$/)
+  assert.equal(
+    manifest.sha256,
+    createHash('sha256').update(bytes).digest('hex'),
+    'wasm 与 dist/xlsx-engine.json 的 sha256 不一致（node scripts/fetch-wasm.mjs --refresh）',
+  )
+  // 固定版本：产物必须就是 wasm.lock.json 里那一份，避免别人换了个 wasm 混进包。
+  // 例外：本次是自己编的（source=built），字节随编译器浮动，只校验自洽性。
+  const lockPath = join(root, 'wasm.lock.json')
+  if (existsSync(lockPath) && manifest.source?.type !== 'built') {
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+    if (lock.sha256) assert.equal(manifest.sha256, lock.sha256, 'wasm 与 wasm.lock.json 的固定 sha256 不一致')
+    if (lock.size) assert.equal(manifest.size, lock.size, 'wasm 与 wasm.lock.json 的固定体积不一致')
+  }
   for (const name of ['memory', '_initialize', 'call', 'wasi_alloc', 'wasi_free'])
     assert.ok(manifest.exports.includes(name), `缺少导出：${name}`)
 })

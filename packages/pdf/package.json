@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-pdf",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "PDF 只读查看器：PDF.js 真字节渲染 + WorkStudio SDK 资源读 / 页面命令",
   "author": "work-studio",
   "license": "Apache-2.0",

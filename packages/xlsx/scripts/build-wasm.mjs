@@ -286,6 +286,9 @@ async function publish() {
     builtAt: new Date().toISOString(),
     // 桥启动时会调用它做版本断言；缺失说明 wasm.rs 没生效
     protocolVersion: exports.includes('xlsx_protocol_version') ? 'runtime' : 'missing',
+    // 本地产物：字节数随编译器/环境浮动，不能拿去和 wasm.lock.json 的固定 sha 比（
+    // 要固定成发布版本就 node scripts/fetch-wasm.mjs --file <wasm> --update-lock）。
+    source: { type: 'built' },
   }
   await writeFile(`${outFile.replace(/\.wasm$/, '')}.json`, `${JSON.stringify(manifest, null, 2)}\n`)
   return { outFile, size: info.size, gzipped, sha256, exports }

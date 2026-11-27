@@ -33,8 +33,33 @@ pnpm --filter @workstudio/plugin-xlsx build
 pnpm --filter @workstudio/plugin-xlsx typecheck
 pnpm --filter @workstudio/plugin-xlsx test     # 需要先 build
 pnpm --filter @workstudio/plugin-xlsx verify
-pnpm --filter @workstudio/plugin-xlsx build:wasm   # 首次 4 min；缺失时自动触发
 ```
+
+## wasm 引擎怎么来的（固定版本，不再靠本地 cargo）
+
+引擎产物只有一份真源：**`wasm.lock.json`**（`url` + `sha256` + `size` + `compile.rustc`）。
+构建时 `scripts/ensure-wasm.mjs` 按 `XLSX_ENGINE_WASM` 决策：
+
+| 模式 | 行为 |
+| --- | --- |
+| `auto`（默认） | 先按 lock 取产物（`.cache/<sha256>.wasm` → lock 的 url → npm 包），拿不到再用 Rust 源码编译 |
+| `fetch` | 只取固定产物，不编译 |
+| `build` | 只用 Rust 源码编译（上游 vendor 引擎 + `rust/xlsx-engine/wasm.rs` 覆盖层） |
+| `off` | 不处理，页面回退「读整份字节」模式 |
+
+`XLSX_REQUIRE_WASM=1`（或 `--require`）时，两条路都失败就构建失败——CI 必须开，不允许静默发降级包。
+
+```bash
+node scripts/ensure-wasm.mjs                 # 就位（日常）
+node scripts/fetch-wasm.mjs --refresh         # 强制重新下载固定产物
+node scripts/fetch-wasm.mjs --file <wasm> --update-lock   # 换了引擎版本后重新锚定
+node scripts/build-wasm.mjs                   # 只编译（需要 cargo）
+```
+
+注意：编译必须用 `wasm.lock.json → compile.rustc` 那个版本（现在 1.99.1）。
+Rust 1.100.0 起 `wasm32-wasip1` 会链接 `crt1-reactor.o`（自带 `_initialize`），和
+`rust/xlsx-engine/wasm.rs` 里显式导出的 `_initialize` 撞 `duplicate symbol`，cargo 直接报错。
+同一版本编译出的字节可复现（当前 `sha256 8d700c38…`）。
 
 产物：
 

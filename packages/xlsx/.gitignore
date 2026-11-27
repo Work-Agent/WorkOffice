@@ -5,3 +5,5 @@ dist/
 commands.json
 api.json
 api.d.ts
+# wasm 产物缓存（内容寻址，按 wasm.lock.json 的 sha256 命名）
+.cache/

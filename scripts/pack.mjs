@@ -129,16 +129,23 @@ for (const id of pluginIds) {
   }
   // 执行点产物自证：引擎清单里的 sha256 必须与随包的 wasm 一致，
   // 否则可能把"上次构建的 wasm + 这次构建的清单"混进安装包。
-  const engineJson = join(pkgRoot, 'dist/engine/xlsx-engine.json')
+  // 布局：dist/xlsx-engine.{wasm,json}（scripts/fetch-wasm.mjs 写入）。
+  const engineJson = join(pkgRoot, 'dist/xlsx-engine.json')
+  const engineWasm = join(pkgRoot, 'dist/xlsx-engine.wasm')
   const engineInfo = await stat(engineJson).catch(() => null)
   if (engineInfo?.isFile()) {
     const manifest = JSON.parse(await readFile(engineJson, 'utf8'))
-    const wasm = new Uint8Array(await readFile(join(pkgRoot, 'dist/engine/xlsx-engine.wasm')))
+    const wasm = new Uint8Array(await readFile(engineWasm))
     const actual = createHash('sha256').update(wasm).digest('hex')
     if (manifest.sha256 !== actual)
       throw new Error(
-        `${id}: wasm 与清单 sha256 不一致（清单 ${String(manifest.sha256).slice(0, 12)}… / 实际 ${actual.slice(0, 12)}…），请重新构建`,
+        `${id}: wasm 与清单 sha256 不一致（清单 ${String(manifest.sha256).slice(0, 12)}… / 实际 ${actual.slice(0, 12)}…），请重新跑 node scripts/fetch-wasm.mjs`,
       )
+  } else if (ws.id === 'xlsx') {
+    console.warn(
+      `warn  ${id}: 没有 dist/xlsx-engine.wasm —— 这个包里页面会回退到「读整份字节」模式` +
+        '（node scripts/fetch-wasm.mjs 补齐）',
+    )
   }
   // 技能目录随插件分发（v2 清单的 skills[].dir 指向它）。
   for (const skill of ws.skills ?? []) {

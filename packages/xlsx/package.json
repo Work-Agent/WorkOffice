@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-xlsx",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Excel 单个工作簿（.xlsx）：WorkStudio 新插件框架 + GenOffice Sheets 页面层。命令读写，字节只由引擎产生。",
   "author": "work-studio",
   "license": "Apache-2.0",
@@ -41,6 +41,8 @@
     "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});for(const f of ['commands.json','api.json','api.d.ts'])fs.rmSync(f,{force:true})\"",
     "sync": "node scripts/sync-renderer.mjs",
     "fork:check": "node scripts/editor-diff.mjs --check",
+    "wasm:fetch": "node scripts/fetch-wasm.mjs",
+    "wasm:pin": "node scripts/fetch-wasm.mjs --update-lock --file",
     "build:wasm": "node scripts/build-wasm.mjs",
     "smoke": "node scripts/smoke.mjs"
   },

@@ -19,16 +19,19 @@ const argv = process.argv.slice(2)
 const engineOnly = argv.includes('--engine-only')
 const pageOnly = argv.includes('--page-only')
 
-/** wasm 只在缺失时构建（首次 ~4 min，之后复用）；失败降级为整份字节模式。 */
+/**
+ * wasm 引擎就位，见 scripts/ensure-wasm.mjs：
+ *   默认 XLSX_ENGINE_WASM=auto —— 先拿 wasm.lock.json 固定的产物（缓存 / 下载），
+ *   拿不到再用 Rust 源码编译（编译器版本见 wasm.lock.json 的 compile.rustc）。
+ *   XLSX_ENGINE_WASM=off / --no-wasm 跳过；XLSX_REQUIRE_WASM=1 拿不到就失败。
+ */
 async function ensureWasm() {
   if (argv.includes('--no-wasm')) return
-  if (existsSync(join(root, 'dist/xlsx-engine.wasm'))) return
   const { spawnSync } = await import('node:child_process')
-  const result = spawnSync(process.execPath, [join(root, 'scripts/build-wasm.mjs')], {
-    stdio: 'inherit',
-  })
-  if (result.status !== 0)
-    console.warn('wasm 未构建：页面将回退到「读整份字节」模式（build:wasm 重试）')
+  const args = [join(root, 'scripts/ensure-wasm.mjs')]
+  if (process.env['XLSX_REQUIRE_WASM'] === '1') args.push('--require')
+  const result = spawnSync(process.execPath, args, { stdio: 'inherit' })
+  if (result.status !== 0) throw new Error('wasm 引擎缺失（node scripts/ensure-wasm.mjs 重试）')
 }
 
 async function buildEngine() {
