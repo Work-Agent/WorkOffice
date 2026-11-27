@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-docx",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Word 文档（.docx）：WorkStudio SDK 文档页插件。页面打开才写，Agent 写经页面队列。",
   "author": "work-studio",
   "license": "Apache-2.0",
