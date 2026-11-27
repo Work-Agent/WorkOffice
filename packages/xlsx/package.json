@@ -1,6 +1,6 @@
 {
   "name": "@workstudio/plugin-xlsx",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Excel 单个工作簿（.xlsx）：WorkStudio 新插件框架 + GenOffice Sheets 页面层。命令读写，字节只由引擎产生。",
   "author": "work-studio",
   "license": "Apache-2.0",
