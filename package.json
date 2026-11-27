@@ -31,7 +31,8 @@
     "pack:pdf": "node scripts/pack.mjs --only pdf",
     "registry:entry": "node scripts/write-registry-entry.mjs",
     "install:plugins": "node scripts/install.mjs",
-    "install:builtin": "node scripts/install.mjs --target ../WorkStudio/src/plugins"
+    "install:builtin": "node scripts/install.mjs --target ../WorkStudio/src/plugins",
+    "verify:zips": "node scripts/verify-zips.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

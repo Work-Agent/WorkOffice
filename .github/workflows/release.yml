@@ -157,44 +157,11 @@ jobs:
           rm -rf release
           pnpm pack:plugins
 
+      # 校验发布包：条目齐全 / 清单正确 / sha256 内容比对（脚本用 node 读 zip，
+      # 不再用 `unzip -l | grep -q`——那在 `set -o pipefail` 下会因 SIGPIPE(141) 假失败）。
       - name: Verify plugin zips
         working-directory: plugin
-        run: |
-          set -euo pipefail
-          for dir in packages/*/; do
-            ID="$(node -p "const p=require('./${dir}package.json'); (p.workstudio && p.workstudio.id) || ''")"
-            [ -n "$ID" ] || continue
-            VERSION="$(node -p "require('./${dir}package.json').version")"
-            ZIP="release/${ID}-${VERSION}.zip"
-
-            [ -f "$ZIP" ] || { echo "::error::missing $ZIP"; exit 1; }
-            [ -f "${ZIP}.sha256" ] || { echo "::error::missing ${ZIP}.sha256"; exit 1; }
-            unzip -l "$ZIP"
-
-            unzip -l "$ZIP" | grep -q 'dist/engine.js'
-            unzip -l "$ZIP" | grep -q 'dist/page/index.html'
-            # xlsx 必须带固定版本的 wasm 引擎（否则等于发了个降级包）。
-            if [ "$ID" = "xlsx" ]; then
-              unzip -l "$ZIP" | grep -q 'dist/xlsx-engine.wasm'
-              unzip -l "$ZIP" | grep -q 'dist/xlsx-engine.json'
-            fi
-            unzip -l "$ZIP" | grep -q 'skills/'
-            unzip -l "$ZIP" | grep -q 'package.json'
-
-            ID="$ID" VERSION="$VERSION" unzip -p "$ZIP" package.json | node -e '
-              let s = "";
-              process.stdin.on("data", (d) => (s += d));
-              process.stdin.on("end", () => {
-                const pkg = JSON.parse(s);
-                if (pkg.workstudio?.id !== process.env.ID) process.exit(1);
-                if (pkg.version !== process.env.VERSION) process.exit(2);
-                if (pkg.dependencies || pkg.devDependencies) process.exit(3);
-              });
-            '
-
-            SHA="$(tr -d '[:space:]' < "${ZIP}.sha256")"
-            [[ "$SHA" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::bad sha256 in ${ZIP}.sha256"; exit 1; }
-          done
+        run: node scripts/verify-zips.mjs
 
       - name: Collect release metadata
         id: meta
