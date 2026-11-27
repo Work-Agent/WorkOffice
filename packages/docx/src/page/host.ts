@@ -134,7 +134,7 @@ export function installDocxHost(input: DocxHostInput) {
     try {
       const bytes = new Uint8Array(data)
       if (bytes.byteLength === 0) return { ok: false, error: '序列化产出空字节' }
-      const result = await bridge.command<Receipt>('docx-pro', 'docx-pro', 'save', {
+      const result = await bridge.command<Receipt>('docx', 'docx', 'save', {
         ref: input.ref,
         pageId: input.pageId,
         bytes,

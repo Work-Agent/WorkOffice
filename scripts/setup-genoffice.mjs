@@ -7,7 +7,7 @@
 // 默认只取 packages/*（引擎 + UI 基础包）；docs 页面层已 fork 到
 // packages/docx/src/editor。apps/* 里需要两份源码：xlsx 的 Rust 引擎
 // （编成 wasm，不是原生 sidecar），以及 apps/docs/src/renderer 的 i18n
-// 与字体（docx-pro 按 submodule 直接引用，见 docs/docx-pro-genoffice-audit.md）。
+// 与字体（docx 按 submodule 直接引用，见 docs/docx-genoffice-audit.md）。
 // 新增能力时再往 SPARSE_PATHS 里加。
 
 import { execFileSync } from 'node:child_process'
@@ -33,7 +33,7 @@ const SPARSE_PATHS = [
   'packages/ui',
   'packages/xlsx-gateway',
   'packages/zip-gate',
-  // docx-pro 的 i18n / 字体复用来源，同时供 scripts/audit-genoffice-fork.mjs
+  // docx 的 i18n / 字体复用来源，同时供 scripts/audit-genoffice-fork.mjs
   // 对齐上游；不取 apps/docs 的 Electron main 与页面入口。
   'apps/docs',
   // wasm 引擎源码（xlsx 插件编译 wasm32-wasip1 reactor）。不做原生

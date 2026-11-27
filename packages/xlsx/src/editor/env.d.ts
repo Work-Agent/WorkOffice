@@ -11,7 +11,7 @@ import type { EditorBridge } from '@xlsx/page/bridge'
 import type { SheetLike } from '@xlsx/shared/sheet-types'
 
 /** 页面注入的启动数据（见 src/page/main.ts）。 */
-export interface XlsxProBoot {
+export interface XlsxBoot {
   sessionId: string
   data: {
     name: string
@@ -44,8 +44,8 @@ declare global {
     readonly projectApi: ProjectApi
     /** 编辑器唯一的 I/O 出口：取字节、保存、主题、脏态。 */
     __xlsxPlus?: EditorBridge
-    __xlsxProBoot?: XlsxProBoot
-    __xlsxPro?: any
+    __xlsxBoot?: XlsxBoot
+    __xlsxEditor?: any
   }
 }
 

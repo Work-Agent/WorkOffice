@@ -90,7 +90,7 @@ async function boot(): Promise<void> {
       container.textContent = ''
       container.removeAttribute('data-error')
       container.className = ''
-      window.__xlsxProBoot = {
+      window.__xlsxBoot = {
         sessionId: ref,
         data: { name: status.name, ref, version: status.hash, size: draft.byteLength, sheets: sheets as never },
         epoch: 0,
@@ -134,7 +134,7 @@ async function boot(): Promise<void> {
     container.removeAttribute('data-error')
     container.className = ''
 
-    window.__xlsxProBoot = {
+    window.__xlsxBoot = {
       sessionId: ref,
       data: {
         name: status.name,

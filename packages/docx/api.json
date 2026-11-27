@@ -1,7 +1,7 @@
 {
   "commands": [
     {
-      "name": "docx-pro.guide",
+      "name": "docx.guide",
       "args": {
         "ref": {
           "type": "string",
@@ -20,7 +20,7 @@
       }
     },
     {
-      "name": "docx-pro.read",
+      "name": "docx.read",
       "args": {
         "ref": {
           "type": "string",
@@ -49,7 +49,7 @@
       }
     },
     {
-      "name": "docx-pro.apply",
+      "name": "docx.apply",
       "args": {
         "ref": {
           "type": "string",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "name": "docx-pro.create",
+      "name": "docx.create",
       "args": {
         "ref": {
           "type": "string",
@@ -80,7 +80,7 @@
       }
     },
     {
-      "name": "docx-pro.load",
+      "name": "docx.load",
       "args": {
         "ref": {
           "type": "string",
@@ -92,7 +92,7 @@
       }
     },
     {
-      "name": "docx-pro.save",
+      "name": "docx.save",
       "args": {
         "ref": {
           "type": "string",
@@ -117,7 +117,7 @@
       }
     },
     {
-      "name": "docx-pro.attach",
+      "name": "docx.attach",
       "args": {
         "ref": {
           "type": "string",
@@ -130,7 +130,7 @@
       }
     },
     {
-      "name": "docx-pro.pending",
+      "name": "docx.pending",
       "args": {
         "id": {
           "type": "string",
@@ -139,7 +139,7 @@
       }
     },
     {
-      "name": "docx-pro.report",
+      "name": "docx.report",
       "args": {
         "ref": {
           "type": "string",
@@ -160,7 +160,7 @@
       }
     },
     {
-      "name": "docx-pro.detach",
+      "name": "docx.detach",
       "args": {
         "ref": {
           "type": "string",
@@ -173,7 +173,7 @@
       }
     },
     {
-      "name": "docx-pro.ack",
+      "name": "docx.ack",
       "args": {
         "id": {
           "type": "string",

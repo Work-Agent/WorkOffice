@@ -80,7 +80,8 @@ if (/[/\\]node_modules$/.test(target)) {
 function checkManifest(id, pkgRoot) {
   const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
   const ws = pkg.workstudio ?? {}
-  if (ws.id !== id) throw new Error(`${id}: workstudio.id 必须为 "${id}"`)
+  // 目录名只是组织方式：安装目录取清单里的 workstudio.id。
+  if (!ws.id) throw new Error(`${id}: 缺少 workstudio.id`)
   if (!pkg.version) throw new Error(`${id}: 缺少 version`)
 
   // WorkStudio SDK 新插件：exports['./workstudio'] + pages.content + commands.json
@@ -120,12 +121,12 @@ function checkManifest(id, pkgRoot) {
 mkdirSync(target, { recursive: true })
 for (const id of pluginIds) {
   const pluginSource = join(root, 'packages', id)
-  const pluginTarget = join(target, id)
   if (!existsSync(join(pluginSource, 'dist'))) {
     console.error(`缺少 packages/${id}/dist，请先运行 pnpm build`)
     process.exit(1)
   }
   const pkg = checkManifest(id, pluginSource)
+  const pluginTarget = join(target, pkg.workstudio.id)
   rmSync(pluginTarget, { recursive: true, force: true })
   mkdirSync(pluginTarget, { recursive: true })
   cpSync(join(pluginSource, 'package.json'), join(pluginTarget, 'package.json'))
@@ -137,6 +138,6 @@ for (const id of pluginIds) {
     const dir = typeof skill === 'string' ? skill : skill?.dir
     if (dir) cpSync(join(pluginSource, dir), join(pluginTarget, dir), { recursive: true })
   }
-  console.log(`installed ${id}@${pkg.version} → ${pluginTarget}`)
+  console.log(`installed ${pkg.workstudio.id}@${pkg.version} → ${pluginTarget}`)
 }
 console.log('\n重启 WorkStudio 后生效。')

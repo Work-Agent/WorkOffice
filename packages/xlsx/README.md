@@ -62,6 +62,6 @@ node scripts/install.mjs --only xlsx
 | P1 | fork 收敛：`src/editor` 只放改过的页面文件，其余回落 vendor；接回 Univer 编辑器 |
 | P2 | 写通路：`page {op:'save'/'saveAs'/'saveBegin'…}`、自动保存、恢复副本 |
 | P3 | agent 面：`apply` / `create` + 页面租约执行 + 令牌分级 |
-| P4 | 清理旧 `packages/xlsx-pro`、注册表发布 |
+| P4 | 注册表发布 |
 
 方案与取舍见仓库 `docs/xlsx-migration.md`。

@@ -1,5 +1,5 @@
 {
-  "name": "@workstudio/plugin-docx-pro",
+  "name": "@workstudio/plugin-docx",
   "version": "0.2.0",
   "description": "Word 文档（.docx）：WorkStudio SDK 文档页插件。页面打开才写，Agent 写经页面队列。",
   "author": "work-studio",
@@ -10,7 +10,7 @@
     "./workstudio": "./dist/engine.js"
   },
   "workstudio": {
-    "id": "docx-pro",
+    "id": "docx",
     "label": "Word 文档",
     "icon": "file-text",
     "pages": {
@@ -38,7 +38,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('commands.json',{force:true})\"",
-    "test": "node --test tests/sdk-engine.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2"

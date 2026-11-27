@@ -129,7 +129,7 @@ let opsBundle = null
 async function vendorOps() {
   if (opsBundle) return opsBundle
   const { build } = await import('esbuild')
-  const outfile = join(tmpdir(), 'pptx-pro-test-ops.mjs')
+  const outfile = join(tmpdir(), 'pptx-test-ops.mjs')
   await build({
     stdin: {
       contents: [

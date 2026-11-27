@@ -2,7 +2,7 @@
 //
 // 旧宿主的 agent-request 页面代理已不存在。这里用插件自己的事件通道
 // 复刻同一语义：引擎 emit request → 页面取正文 → 执行 → ack。
-// Agent 的写永远经过页面 PM 事务，最后仍由 docx-pro.save 落盘。
+// Agent 的写永远经过页面 PM 事务，最后仍由 docx.save 落盘。
 
 import type { Editor } from '@tiptap/core'
 import type { FileActionContext } from '../editor/file-actions'
@@ -30,11 +30,11 @@ function bridge() {
 }
 
 function editorOf(): Editor | null {
-  return (window.__docxPro?.getEditor() as Editor | null | undefined) ?? null
+  return (window.__docx?.getEditor() as Editor | null | undefined) ?? null
 }
 
 function ctxOf(): FileActionContext | null {
-  return (window.__docxPro?.getCtx() as FileActionContext | null | undefined) ?? null
+  return (window.__docx?.getCtx() as FileActionContext | null | undefined) ?? null
 }
 
 function coded(error: unknown): { code: string; message: string } {
@@ -46,7 +46,7 @@ function coded(error: unknown): { code: string; message: string } {
 }
 
 async function ack(id: string, payload: AckPayload): Promise<void> {
-  await bridge().command('docx-pro', 'docx-pro', 'ack', {
+  await bridge().command('docx', 'docx', 'ack', {
     id,
     ok: !payload.error,
     payload: JSON.stringify(payload),
@@ -56,7 +56,7 @@ async function ack(id: string, payload: AckPayload): Promise<void> {
 export function installPageQueue(options: QueueOptions) {
   const { ref, pageId, host } = options
   // 必须先订阅本插件 events，否则 receipt / request 不会投递到页面。
-  void bridge().subscribe('docx-pro', 'events').catch(() => undefined)
+  void bridge().subscribe('docx', 'events').catch(() => undefined)
   let docRev = 0
   let attached: Editor | null = null
   let reportTimer: ReturnType<typeof setTimeout> | null = null
@@ -67,7 +67,7 @@ export function installPageQueue(options: QueueOptions) {
     reportTimer = setTimeout(() => {
       reportTimer = null
       void bridge()
-        .command('docx-pro', 'docx-pro', 'report', {
+        .command('docx', 'docx', 'report', {
           ref,
           pageId,
           docRev,
@@ -111,7 +111,7 @@ export function installPageQueue(options: QueueOptions) {
     const bytes = await buildDocBytes(ctx)
     if (!bytes) throw new Error('command.page-unavailable: 无法序列化当前文档')
     // 先同步租约，避免 Agent 刚 read 完的 docRev 在 apply 时被判 stale-index。
-    await bridge().command('docx-pro', 'docx-pro', 'report', {
+    await bridge().command('docx', 'docx', 'report', {
       ref,
       pageId,
       docRev,
@@ -177,12 +177,12 @@ export function installPageQueue(options: QueueOptions) {
 
   const off = bridge().onUpdate((update) => {
     if (closed) return
-    if (update.domain !== 'docx-pro' || update.resource !== 'events') return
+    if (update.domain !== 'docx' || update.resource !== 'events') return
     if (update.type !== 'event' || update.event !== 'request') return
     const id = (update.data as { id?: unknown } | null)?.id
     if (typeof id !== 'string') return
     void bridge()
-      .command<PageRequest | null>('docx-pro', 'docx-pro', 'pending', { id })
+      .command<PageRequest | null>('docx', 'docx', 'pending', { id })
       .then((result) => {
         if (result.ok && result.data) return handle(result.data)
       })
@@ -204,7 +204,7 @@ export function installPageQueue(options: QueueOptions) {
     off()
     document.removeEventListener('visibilitychange', onVisible)
     window.removeEventListener('focus', onVisible)
-    void bridge().command('docx-pro', 'docx-pro', 'detach', { ref, pageId }).catch(() => undefined)
+    void bridge().command('docx', 'docx', 'detach', { ref, pageId }).catch(() => undefined)
   })
 
   return {

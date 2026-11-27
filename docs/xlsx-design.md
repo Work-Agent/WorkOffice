@@ -203,7 +203,7 @@ packages/xlsx/
 }
 ```
 
-> id 用 `xlsx` 与 `docx-plus` 对齐：新框架按 `claims.priority` 竞争，不比 MIME，**新旧插件可并存**（`xlsx` 100 > `xlsx-pro`），迁移期可回退。若要保留安装来源，可改回 `xlsx-pro` 并升 0.2.0，其余方案不变。
+> id 统一为 `xlsx`：新框架按 `claims.priority` 竞争，不比 MIME。旧 `xlsx-pro` 已删除，不再保留回退路径。
 
 ---
 
@@ -225,7 +225,7 @@ packages/xlsx/
 'xlsx.apply': {
   args: {
     ref: { type: 'string', required: true },
-    commands: { type: 'string', required: true },   // JSON 字符串，与 docx-plus 一致
+    commands: { type: 'string', required: true },   // JSON 字符串，与 docx 一致
     baseHash: { type: 'string' },                    // 磁盘 CAS
     docRev: { type: 'number' },                      // L1 读内容型
     structureEpoch: { type: 'number' },              // L2 绝对坐标
@@ -426,7 +426,7 @@ command xlsx.read {ref, what}
 
 ### 6.2 `window.desktopApi` 兼容层
 
-页面渲染器有 ~40 处 `desktopApi.*`。沿用 docx-plus 的 `Proxy` 方案，一次性把**未实现的**表面收成默认值，只显式实现真正用到的：
+页面渲染器有 ~40 处 `desktopApi.*`。沿用 docx 插件的 `Proxy` 方案，一次性把**未实现的**表面收成默认值，只显式实现真正用到的：
 
 ```ts
 // src/page/host/desktop-api.ts

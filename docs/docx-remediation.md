@@ -1,10 +1,10 @@
-# docx-pro 整改方案（WorkStudio 新插件框架 · 只做文档页）
+# docx 整改方案（WorkStudio 新插件框架 · 只做文档页）
 
 > 依据：`@work-studio/sdk`（npm `0.1.1`）与当前 preload / dispatcher 实现。
 >
-> 本方案只改 `packages/docx-pro`，不改 WorkStudio 宿主、不改 SDK。
+> 本方案只改 `packages/docx`，不改 WorkStudio 宿主、不改 SDK。
 >
-> **范围纠正：docx-pro 只负责“给定 ref 打开文档并读写内容”。标签页、文件列表、新建文件、另存为、dirty 标记、工作区文件变更通知都属于宿主 shell / 文件管理，不属于插件。**
+> **范围纠正：docx 只负责“给定 ref 打开文档并读写内容”。标签页、文件列表、新建文件、另存为、dirty 标记、工作区文件变更通知都属于宿主 shell / 文件管理，不属于插件。**
 
 ---
 
@@ -13,7 +13,7 @@
 | 归属 | 职责 |
 | --- | --- |
 | 宿主 shell | 标签页、打开/关闭视图、dirty 标记、文件列表、新建文件、另存为、重命名、工作区刷新 |
-| docx-pro 插件 | 接收 `ref` → 打开文档页 → 加载字节 → 编辑 → 保存当前 `ref`；Agent 在页面内读写 |
+| docx 插件 | 接收 `ref` → 打开文档页 → 加载字节 → 编辑 → 保存当前 `ref`；Agent 在页面内读写 |
 | 宿主 / SDK | IPC 通道、文件 token、命令鉴权、页面生命周期 |
 
 因此：
@@ -21,7 +21,7 @@
 - 插件**不需要**实现标签页，也不需要上报 dirty；
 - 插件**不需要**做文件列表 / 新建 / 另存为；
 - 插件**不需要**订阅 `workspace` 文件树；
-- 新建文档是宿主行为：宿主创建文件后打开 `plugin://docx-pro/content?ref=...`，插件只看到已存在的 ref。
+- 新建文档是宿主行为：宿主创建文件后打开 `plugin://docx/content?ref=...`，插件只看到已存在的 ref。
 
 这样就不存在“新建要先有页面、页面又依赖文件”的循环：**新建不归插件**。
 
@@ -67,12 +67,12 @@
 
 ```jsonc
 {
-  "name": "@workstudio/plugin-docx-pro",
+  "name": "@workstudio/plugin-docx",
   "version": "1.0.0",
   "type": "module",
   "exports": { "./workstudio": "./dist/engine.js" },
   "workstudio": {
-    "id": "docx-pro",
+    "id": "docx",
     "label": "Word 文档",
     "icon": "file-text",
     "pages": { "content": "dist/page/index.html" },
@@ -90,12 +90,12 @@
 ### 3.2 运行结构
 
 ```text
-plugin://docx-pro/content?ref=<file:///w/report.docx>&locator=docx:block:12
+plugin://docx/content?ref=<file:///w/report.docx>&locator=docx:block:12
         │
-        ├─ docx-pro.load            → 字节 + hash + tier
-        ├─ docx-pro.attach/report/detach
-        ├─ docx-pro.save            → 当前 ref 唯一落盘点
-        └─ 订阅 docx-pro/events     → Agent 请求 / 保存回执
+        ├─ docx.load            → 字节 + hash + tier
+        ├─ docx.attach/report/detach
+        ├─ docx.save            → 当前 ref 唯一落盘点
+        └─ 订阅 docx/events     → Agent 请求 / 保存回执
 
 主进程引擎（dist/engine.js）
         ├─ ResourceAdapter：docx（read / grep / open）
@@ -106,18 +106,18 @@ plugin://docx-pro/content?ref=<file:///w/report.docx>&locator=docx:block:12
 
 ### 3.3 写不变量
 
-1. **没有页面就没有写**：`docx-pro.apply` 没有有效页面租约时直接 `command.page-unavailable`。
+1. **没有页面就没有写**：`docx.apply` 没有有效页面租约时直接 `command.page-unavailable`。
 2. **Agent 只入队**：`apply` 只解析参数、入队、等待页面 `ack`；主进程不执行块命令、不拼 XML、不写文件。
-3. **唯一落盘点**：只有页面调用的 `docx-pro.save` 写当前 `ref`，且必须持有该 ref 的页面租约；`expose.agent: false`。
-4. **不碰文件管理**：只有 `docx-pro.create` 创建空白 seed（唯一创建例外）；没有 `saveAs` / `status` / watcher；正文仍只由页面 `save` 写。
+3. **唯一落盘点**：只有页面调用的 `docx.save` 写当前 `ref`，且必须持有该 ref 的页面租约；`expose.agent: false`。
+4. **不碰文件管理**：只有 `docx.create` 创建空白 seed（唯一创建例外）；没有 `saveAs` / `status` / watcher；正文仍只由页面 `save` 写。
 5. **只读不受限**：没有页面时 `guide` / `read` 仍可读磁盘；这是读，不是写。
 
 ### 3.4 两条写路径
 
 | 路径 | 入口 | 写入者 | 结果 |
 | --- | --- | --- | --- |
-| 人工编辑 | 编辑器 PM 事务 → 编辑器 `save()` | 页面 `docx-pro.save` | 写当前 ref |
-| Agent + 页面 | Agent `command` → `docx-pro.apply` → 页面队列 | 页面 PM 事务 + `docx-pro.save` | 写当前 ref |
+| 人工编辑 | 编辑器 PM 事务 → 编辑器 `save()` | 页面 `docx.save` | 写当前 ref |
+| Agent + 页面 | Agent `command` → `docx.apply` → 页面队列 | 页面 PM 事务 + `docx.save` | 写当前 ref |
 
 没有“Agent + 无页面”；保存回执只对当前页面。
 
@@ -156,22 +156,22 @@ resources: {
 
 | 命令 | 参数 | 语义 |
 | --- | --- | --- |
-| `docx-pro.guide` | `ref`、`group?`、`op?` | 命令目录；不读字节 |
-| `docx-pro.read` | `ref`、`what?`、`startBlockIndex?`、`endBlockIndex?`、`offset?` | 页面 live 读；无页面读磁盘 |
-| `docx-pro.create` | `ref` | 创建空白 seed 文件；目标不存在；不写正文 |
-| `docx-pro.apply` | `ref`、`commands: string`、`baseHash?`、`docRev?`、`dryRun?` | `commands` 是 JSON 字符串；只入队；无页面拒绝 |
+| `docx.guide` | `ref`、`group?`、`op?` | 命令目录；不读字节 |
+| `docx.read` | `ref`、`what?`、`startBlockIndex?`、`endBlockIndex?`、`offset?` | 页面 live 读；无页面读磁盘 |
+| `docx.create` | `ref` | 创建空白 seed 文件；目标不存在；不写正文 |
+| `docx.apply` | `ref`、`commands: string`、`baseHash?`、`docRev?`、`dryRun?` | `commands` 是 JSON 字符串；只入队；无页面拒绝 |
 
 **页面可见（7 个，均 `expose.agent: false`）**
 
 | 命令 | 参数 | 语义 |
 | --- | --- | --- |
-| `docx-pro.load` | `ref`、`base64?` | 默认返回 `{ bytes, hash, name, size, tier }`；`base64:true` 返回 `{ data, ... }` |
-| `docx-pro.save` | `ref`、`data?: base64`、`bytes?`（快路径）、`baseHash?`、`type: 'page' \| 'agent'` | 优先 typed array，否则 base64；校验后写当前 ref |
-| `docx-pro.attach` | `ref`、`pageId` | 登记页面租约；返回 `{ hash, pending }` |
-| `docx-pro.pending` | `id` | 取回待处理请求正文（事件只带 id） |
-| `docx-pro.report` | `ref`、`pageId`、`docRev`、`hash` | 页面节流上报 live 版本 |
-| `docx-pro.detach` | `ref`、`pageId` | 撤销租约 |
-| `docx-pro.ack` | `id`、`ok`、`payload: string`（JSON） | 页面回执，结算 pending |
+| `docx.load` | `ref`、`base64?` | 默认返回 `{ bytes, hash, name, size, tier }`；`base64:true` 返回 `{ data, ... }` |
+| `docx.save` | `ref`、`data?: base64`、`bytes?`（快路径）、`baseHash?`、`type: 'page' \| 'agent'` | 优先 typed array，否则 base64；校验后写当前 ref |
+| `docx.attach` | `ref`、`pageId` | 登记页面租约；返回 `{ hash, pending }` |
+| `docx.pending` | `id` | 取回待处理请求正文（事件只带 id） |
+| `docx.report` | `ref`、`pageId`、`docRev`、`hash` | 页面节流上报 live 版本 |
+| `docx.detach` | `ref`、`pageId` | 撤销租约 |
+| `docx.ack` | `id`、`ok`、`payload: string`（JSON） | 页面回执，结算 pending |
 
 没有 `saveAs` / `status` / `watch`；`create` 只写空白 seed。
 
@@ -226,12 +226,12 @@ export interface PageAckPayload {
 `window.workStudio.command` 底层是 `ipcRenderer.invoke`，structured clone 支持 typed array：
 
 ```ts
-const loaded = await window.workStudio.command('docx-pro', 'docx-pro', 'load', { ref })
+const loaded = await window.workStudio.command('docx', 'docx', 'load', { ref })
 const bytes = loaded.ok && loaded.data.bytes instanceof Uint8Array
   ? loaded.data.bytes
   : base64ToBytes((loaded as { data: { data: string } }).data.data)
 
-await window.workStudio.command('docx-pro', 'docx-pro', 'save', {
+await window.workStudio.command('docx', 'docx', 'save', {
   ref,
   bytes,       // 契约外快路径；校验忽略未声明字段
   baseHash,
@@ -255,19 +255,19 @@ await window.workStudio.command('docx-pro', 'docx-pro', 'save', {
 ### 4.6 页面代理
 
 ```text
-Agent → docx-pro.apply(commands: JSON 字符串)
+Agent → docx.apply(commands: JSON 字符串)
   │
   ├─ 无页面 → command.page-unavailable（不写盘）
   │
   └─ 页面存在
         ├─ 引擎 JSON.parse + 校验，生成 requestId，挂起 Promise，放入 scope.pending
         ├─ scope.events.emit('request', { id, type })      ← 事件只带 id/type
-        ├─ 页面订阅 docx-pro/events，收到后调 docx-pro.pending({ id })
+        ├─ 页面订阅 docx/events，收到后调 docx.pending({ id })
         ├─ type=apply：执行 applyCommandBatch（PM 事务，整批回滚）
-        │    └─ 落盘 → docx-pro.save({ bytes, type:'agent', baseHash })
+        │    └─ 落盘 → docx.save({ bytes, type:'agent', baseHash })
         ├─ type=read：序列化 live 文档 → readMany
-        ├─ type=flush：编辑器 save() → docx-pro.save
-        └─ 页面 docx-pro.ack({ id, ok, payload: JSON.stringify({ data, receipt, error }) })
+        ├─ type=flush：编辑器 save() → docx.save
+        └─ 页面 docx.ack({ id, ok, payload: JSON.stringify({ data, receipt, error }) })
   │
   └─ 引擎结算 Promise；30s 超时返回 command.page-unavailable
 ```
@@ -287,9 +287,9 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 | --- | --- |
 | `src/engine/index.ts` | `definePlugin` 入口；adapter、命令、`events`、`lifecycle` |
 | `src/engine/resource.ts` | `docx` adapter：`read` / `grep` / `open` |
-| `src/engine/commands/guide.ts` | `docx-pro.guide` |
-| `src/engine/commands/read.ts` | `docx-pro.read` |
-| `src/engine/commands/apply.ts` | `docx-pro.apply`；JSON 解析、入队；不写盘 |
+| `src/engine/commands/guide.ts` | `docx.guide` |
+| `src/engine/commands/read.ts` | `docx.read` |
+| `src/engine/commands/apply.ts` | `docx.apply`；JSON 解析、入队；不写盘 |
 | `src/engine/commands/save.ts` | `load` / `save`；typed array / base64、CAS |
 | `src/engine/state.ts` | 租约、pending、超时、事件 |
 | `src/engine/base64.ts` | base64 兜底编解码 |
@@ -303,8 +303,8 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 | `package.json` | 新清单、`exports['./workstudio']`、版本 `1.0.0`、去掉 `./ura` |
 | `scripts/build.mjs` | esbuild 引擎 → `dist/engine.js`；Vite 页面；`workstudio-plugin .` 生成静态描述 |
 | `scripts/verify.mjs` | 校验清单、exports、页面、commands.json 对齐、一次 load→save 往返 |
-| `src/page/main.ts` | `?ref=` / `?locator=`；`docx-pro.load`；订阅 `docx-pro/events`；启动编辑器 |
-| `src/page/host.ts` | `window.desktop` 适配：保存 → `docx-pro.save`；打开 → `load`；主题 → `shell/appearance` |
+| `src/page/main.ts` | `?ref=` / `?locator=`；`docx.load`；订阅 `docx/events`；启动编辑器 |
+| `src/page/host.ts` | `window.desktop` 适配：保存 → `docx.save`；打开 → `load`；主题 → `shell/appearance` |
 | `src/page/env.d.ts` | 只保留 `window.workStudio` 与页面内部类型 |
 | `src/page/block-commands.ts` / `command-batch.ts` | 保留；补 `docRev`、`dryRun` 快照、`ack` |
 | `src/engine/read.ts` | 去掉旧 ABI 依赖；纯函数化 |
@@ -324,8 +324,8 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 
 ### 5.4 编辑器 fork 最小改动
 
-1. `__docxPro` 保留 `getCtx` / `getEditor` / `serialize`；新增 `reload(bytes)` / `replaceDocument(bytes)`（供页面重新加载用）。
-2. `window.desktop.saveDocx*` → `docx-pro.save`；不再接收 `version/epoch`。
+1. `__docx` 保留 `getCtx` / `getEditor` / `serialize`；新增 `reload(bytes)` / `replaceDocument(bytes)`（供页面重新加载用）。
+2. `window.desktop.saveDocx*` → `docx.save`；不再接收 `version/epoch`。
 3. `consumePendingOpenDocx` 返回 `{ path: ref, name, dataUrl, hash }`；`consumeNewBlankDoc` 返回 `false`；AI 面板关闭。
 4. 主题订阅 `shell/appearance`。
 5. 打印 / 导出保持页面内浏览器能力。
@@ -334,10 +334,10 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 
 ```text
 助手只有 4 个命令（通过 command / bash）：
-  docx-pro.guide   → 命令目录
-  docx-pro.read    → 读 context / blocks / comments / notes / revisions / styles / audit
-  docx-pro.create  → 创建空白 seed；不写正文
-  docx-pro.apply   → 命令批；commands 是 JSON 字符串；要求文档页面已打开
+  docx.guide   → 命令目录
+  docx.read    → 读 context / blocks / comments / notes / revisions / styles / audit
+  docx.create  → 创建空白 seed；不写正文
+  docx.apply   → 命令批；commands 是 JSON 字符串；要求文档页面已打开
 
 没有 saveAs：另存为属于宿主文件管理。
 没有无页面写：页面没打开就拒绝，不要尝试后台改文件。
@@ -346,10 +346,10 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 
 | 旧 | 新 |
 | --- | --- |
-| `docx_guide` | `command({ domain:'docx-pro', action:'guide', input:{ ref, group?, op? } })` |
-| `docx_read` | 块列表用通用 `read`；其余用 `docx-pro.read` |
-| `docx_create` | `docx-pro.create`：只创建空白 seed，然后打开页面再 apply |
-| `docx_apply` | `command({ domain:'docx-pro', action:'apply', input:{ ref, commands: JSON.stringify([...]), baseHash?, docRev?, dryRun? } })` |
+| `docx_guide` | `command({ domain:'docx', action:'guide', input:{ ref, group?, op? } })` |
+| `docx_read` | 块列表用通用 `read`；其余用 `docx.read` |
+| `docx_create` | `docx.create`：只创建空白 seed，然后打开页面再 apply |
+| `docx_apply` | `command({ domain:'docx', action:'apply', input:{ ref, commands: JSON.stringify([...]), baseHash?, docRev?, dryRun? } })` |
 | `version` / `epoch` | `baseHash` / `docRev` |
 | `command.page-unavailable` | 页面未打开；让用户打开文档 |
 | `command.stale` | 文件已变；重新 `read` 后带新 `baseHash` 重发 |
@@ -363,7 +363,7 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 
 - 确认 typed array 在页面 ↔ 引擎的 invoke 往返；
 - 确认 `commands` JSON 字符串在 `commands.json` / `command` 工具中可用；
-- 确认 `docx-pro/events` 页面订阅可用；
+- 确认 `docx/events` 页面订阅可用；
 - 确认插件不碰标签 / 文件管理。
 
 ### P1 — 引擎只读（2–3 人日）
@@ -377,7 +377,7 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 ### P2 — 页面宿主与人工保存（4–5 人日）
 
 - `page/main.ts`：`ref` / `locator` / `load` / 编辑器；
-- `page/host.ts`：`saveDocx*` → `docx-pro.save`；
+- `page/host.ts`：`saveDocx*` → `docx.save`；
 - `attach` / `detach`；typed array 快路径 + base64 兜底；
 - 16 MB 上限、只读 tier。
 
@@ -441,19 +441,19 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 | workspace 树订阅 | ❌ | 插件不需要；外部修改由 `baseHash` 冲突发现 |
 | 宿主 CAS/version | ✅（插件等价） | `baseHash` / `docRev` |
 
-结论：不改宿主时，docx-pro 作为**文档页插件**是完整可交付的；不需要标签页、文件管理或新建能力。
+结论：不改宿主时，docx 作为**文档页插件**是完整可交付的；不需要标签页、文件管理或新建能力。
 
 ---
 
 ## 9. 提交切分
 
-1. `chore(docx-pro): add sdk manifest and remove ura entry`
-2. `refactor(docx-pro): extract docx read adapter and guide/read commands`
-3. `refactor(docx-pro): remove headless plan/exec and page-session bridge`
-4. `feat(docx-pro): page load/save over workStudio commands`
-5. `feat(docx-pro): page lease and event-driven agent proxy`
-6. `test(docx-pro): no-page rejection, typed-array roundtrip, save CAS, queue`
-7. `chore(docx-pro): packaging, skills and docs for SDK framework`
+1. `chore(docx): add sdk manifest and remove ura entry`
+2. `refactor(docx): extract docx read adapter and guide/read commands`
+3. `refactor(docx): remove headless plan/exec and page-session bridge`
+4. `feat(docx): page load/save over workStudio commands`
+5. `feat(docx): page lease and event-driven agent proxy`
+6. `test(docx): no-page rejection, typed-array roundtrip, save CAS, queue`
+7. `chore(docx): packaging, skills and docs for SDK framework`
 
 ---
 
@@ -461,7 +461,7 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 
 | 项 | 现状 | 处理 |
 | --- | --- | --- |
-| typed array 的 invoke 往返 | 设计上可用，未实测 | P0 用最小页面 + `docx-pro.load/save` 验证；失败则 base64，功能不变 |
+| typed array 的 invoke 往返 | 设计上可用，未实测 | P0 用最小页面 + `docx.load/save` 验证；失败则 base64，功能不变 |
 | `commands` JSON 字符串 | 可进 `commands.json`，但 Agent 必须 `JSON.stringify` | 技能写示例；`guide` 返回 schema；不改成宿主未支持的对象参数 |
 | 外部修改 | 不做 watcher；下一次 `save` 用 `baseHash` 发现冲突 | 页面提示冲突；若产品要求自动刷新，再加插件级 watcher，仍是插件范围 |
 | 16 MB 上限 | 页面编辑上限，超过只读 | 保留编辑器 tier；不引入分块 |
@@ -486,7 +486,7 @@ Agent → docx-pro.apply(commands: JSON 字符串)
 - 删除 URA / `plan` / `exec` / 旧 tools / legacy 声明 / 无页面写路径；
 - `scripts/build.mjs`、`gen-commands.mjs`、`verify.mjs`、`install.mjs`、`pack.mjs` 适配 SDK 插件；
 - `tests/sdk-engine.test.mjs` 覆盖 guide/read/load、无页面拒绝、页面队列、save CAS；
-- 产物：`release/docx-pro-1.1.0.zip`（12.9 MB）。
+- 产物：`release/docx-1.1.0.zip`（12.9 MB）。
 
 未做（明确属于宿主）：
 

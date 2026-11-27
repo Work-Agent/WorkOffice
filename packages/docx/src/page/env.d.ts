@@ -64,7 +64,7 @@ export interface PageRequestRead {
 
 export type PageRequest = PageRequestApply | PageRequestRead
 
-export interface DocxProBridge {
+export interface DocxBridge {
   getCtx(): unknown
   getEditor(): unknown
   serialize(): Promise<Uint8Array | null>
@@ -75,7 +75,7 @@ export interface DocxProBridge {
 declare global {
   interface Window {
     workStudio: WorkStudioBridge
-    __docxPro?: DocxProBridge
+    __docx?: DocxBridge
   }
 }
 

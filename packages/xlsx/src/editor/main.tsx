@@ -51,7 +51,7 @@ async function loadCellFonts(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const boot = window.__xlsxProBoot
+  const boot = window.__xlsxBoot
   const sessionId = boot?.sessionId ?? new URLSearchParams(location.search).get('ref')
   if (!sessionId) {
     fail('缺少 ?ref=：请从工作区打开一个 .xlsx 文件')
@@ -85,8 +85,8 @@ async function bootstrap(): Promise<void> {
   await installWorkStudioHost({
     sessionId,
     data,
-    bytes: window.__xlsxProBoot?.bytes,
-    epoch: window.__xlsxProBoot?.epoch ?? 0,
+    bytes: window.__xlsxBoot?.bytes,
+    epoch: window.__xlsxBoot?.epoch ?? 0,
     onDirty: (dirty) => window.__xlsxPlus?.setDirty(dirty),
     onToast: (message) => window.__xlsxPlus?.toast(message),
     onReceipt: () => undefined,

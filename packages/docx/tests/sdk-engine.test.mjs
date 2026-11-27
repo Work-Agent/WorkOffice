@@ -11,7 +11,7 @@ const ref = pathToFileURL(fileURLToPath(file)).href
 await writeFile(file, buildDocx())
 
 let emit = () => {}
-const scope = { pluginId: 'docx-pro', events: { emit: (name, data) => emit(name, data) }, log: console }
+const scope = { pluginId: 'docx', events: { emit: (name, data) => emit(name, data) }, log: console }
 await workstudio.lifecycle.activate(scope)
 const ctx = {
   fs: {
@@ -23,11 +23,11 @@ const ctx = {
 }
 
 test('guide / read / load', async () => {
-  const guide = await workstudio.commands['docx-pro.guide'].run({ ref }, ctx)
+  const guide = await workstudio.commands['docx.guide'].run({ ref }, ctx)
   assert.match(guide, /blocks/)
-  const read = await workstudio.commands['docx-pro.read'].run({ ref, what: 'context' }, ctx)
+  const read = await workstudio.commands['docx.read'].run({ ref, what: 'context' }, ctx)
   assert.match(read, /blocks=/)
-  const loaded = await workstudio.commands['docx-pro.load'].run({ ref }, ctx)
+  const loaded = await workstudio.commands['docx.load'].run({ ref }, ctx)
   assert.ok(loaded.bytes instanceof Uint8Array)
   assert.equal(typeof loaded.hash, 'string')
 })
@@ -35,12 +35,12 @@ test('guide / read / load', async () => {
 test('create：只创建空白 seed，目标存在拒绝', async () => {
   const target = new URL('../.test-created.docx', import.meta.url)
   const targetRef = pathToFileURL(fileURLToPath(target)).href
-  const created = await workstudio.commands['docx-pro.create'].run({ ref: targetRef }, ctx)
+  const created = await workstudio.commands['docx.create'].run({ ref: targetRef }, ctx)
   assert.equal(created.created, true)
-  const loaded = await workstudio.commands['docx-pro.load'].run({ ref: targetRef }, ctx)
+  const loaded = await workstudio.commands['docx.load'].run({ ref: targetRef }, ctx)
   assert.ok(loaded.bytes instanceof Uint8Array)
   await assert.rejects(
-    () => workstudio.commands['docx-pro.create'].run({ ref: targetRef }, ctx),
+    () => workstudio.commands['docx.create'].run({ ref: targetRef }, ctx),
     /resource\.exists/,
   )
   await unlink(target).catch(() => {})
@@ -48,27 +48,27 @@ test('create：只创建空白 seed，目标存在拒绝', async () => {
 
 test('无页面 apply 直接拒绝', async () => {
   await assert.rejects(
-    () => workstudio.commands['docx-pro.apply'].run({ ref, commands: '[]' }, ctx),
+    () => workstudio.commands['docx.apply'].run({ ref, commands: '[]' }, ctx),
     /command\.page-unavailable/,
   )
 })
 
 test('页面队列：apply → pending → ack', async () => {
-  await workstudio.commands['docx-pro.attach'].run({ ref, pageId: 'p1' }, ctx)
+  await workstudio.commands['docx.attach'].run({ ref, pageId: 'p1' }, ctx)
   const eventP = new Promise((resolve) => {
     emit = (name, data) => name === 'request' && resolve(data)
   })
-  const pending = workstudio.commands['docx-pro.apply'].run(
+  const pending = workstudio.commands['docx.apply'].run(
     { ref, commands: '[{"op":"setText","index":1,"text":"新"}]' },
     ctx,
   )
   const event = await eventP
   assert.equal(event.type, 'apply')
-  const request = await workstudio.commands['docx-pro.pending'].run({ id: event.id }, ctx)
+  const request = await workstudio.commands['docx.pending'].run({ id: event.id }, ctx)
   assert.equal(request.type, 'apply')
   assert.equal(request.commands.length, 1)
   const receipt = { ref, hash: 'h', size: 1, at: 1, applied: 1 }
-  await workstudio.commands['docx-pro.ack'].run(
+  await workstudio.commands['docx.ack'].run(
     { id: event.id, ok: true, payload: JSON.stringify({ receipt }) },
     ctx,
   )
@@ -76,15 +76,15 @@ test('页面队列：apply → pending → ack', async () => {
 })
 
 test('save：typed array 往返 + hash CAS', async () => {
-  const loaded = await workstudio.commands['docx-pro.load'].run({ ref }, ctx)
-  const saved = await workstudio.commands['docx-pro.save'].run(
+  const loaded = await workstudio.commands['docx.load'].run({ ref }, ctx)
+  const saved = await workstudio.commands['docx.save'].run(
     { ref, pageId: 'p1', bytes: loaded.bytes, baseHash: loaded.hash, type: 'page' },
     ctx,
   )
   assert.equal(saved.hash, loaded.hash)
   await assert.rejects(
     () =>
-      workstudio.commands['docx-pro.save'].run(
+      workstudio.commands['docx.save'].run(
         { ref, pageId: 'p1', bytes: loaded.bytes, baseHash: 'stale', type: 'page' },
         ctx,
       ),

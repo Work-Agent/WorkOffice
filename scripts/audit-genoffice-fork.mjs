@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 审计 docx-pro 的 renderer fork 与 GenOffice 上游的差异，回答一个问题：
+// 审计 docx 的 renderer fork 与 GenOffice 上游的差异，回答一个问题：
 //
 //   fork 里哪些文件已经可以改回从 vendor/genoffice 子模块直接取？
 //
@@ -25,7 +25,7 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(name)
   return i < 0 ? fallback : process.argv[i + 1]
 }
-const FORK = resolve(root, arg('--fork', 'packages/docx-pro/src/editor'))
+const FORK = resolve(root, arg('--fork', 'packages/docx/src/editor'))
 const UP = resolve(root, arg('--upstream', 'vendor/genoffice/apps/docs/src/renderer'))
 
 if (!existsSync(FORK) || !existsSync(UP)) {
@@ -139,7 +139,7 @@ const printList = (title, list, fmt = (x) => x) => {
   for (const x of list.sort()) console.log(`  ${fmt(x)}`)
 }
 
-console.log('docx-pro renderer fork ↔ genoffice apps/docs renderer')
+console.log('docx renderer fork ↔ genoffice apps/docs renderer')
 console.log(`  fork     ${relative(root, FORK)} (${forkFiles.length} files)`)
 console.log(`  upstream ${relative(root, UP)} (${upFiles.size} files)`)
 console.log('\n## 概况')

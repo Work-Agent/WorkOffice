@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// 生成 docx-pro ↔ GenOffice 的逐文件处置清单：
+// 生成 docx ↔ GenOffice 的逐文件处置清单：
 //
 //   node scripts/gen-genoffice-inventory.mjs
 //
 // 输出：
-//   docs/docx-pro-genoffice-inventory.csv   逐文件（可直接给脚本/表格用）
-//   docs/docx-pro-genoffice-inventory.md    按处置分组的清单
+//   docs/docx-genoffice-inventory.csv   逐文件（可直接给脚本/表格用）
+//   docs/docx-genoffice-inventory.md    按处置分组的清单
 //
-// 判定口径见 docs/docx-pro-genoffice-audit.md §1：
+// 判定口径见 docs/docx-genoffice-audit.md §1：
 //   direct-*        直接 git：submodule 包 / 数据 / 资产，不维护本地副本
 //   upstream-ready  文件 + 相对 import 闭包全一致；可整流取，但先别混用路径
 //   fork-*          必须保留本地副本并维护改动
@@ -19,10 +19,10 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const FORK = resolve(root, 'packages/docx-pro/src/editor')
+const FORK = resolve(root, 'packages/docx/src/editor')
 const UP = resolve(root, 'vendor/genoffice/apps/docs/src/renderer')
-const OUT_CSV = resolve(root, 'docs/docx-pro-genoffice-inventory.csv')
-const OUT_MD = resolve(root, 'docs/docx-pro-genoffice-inventory.md')
+const OUT_CSV = resolve(root, 'docs/docx-genoffice-inventory.csv')
+const OUT_MD = resolve(root, 'docs/docx-genoffice-inventory.md')
 
 if (!existsSync(FORK) || !existsSync(UP)) {
   console.error('缺少 fork 或 vendor/genoffice/apps/docs；先跑 pnpm setup。')
@@ -319,10 +319,10 @@ for (const r of rows) {
 }
 const count = (c) => (byCat.get(c) ?? []).length
 const lines = []
-lines.push('# docx-pro ↔ GenOffice 逐文件处置清单')
+lines.push('# docx ↔ GenOffice 逐文件处置清单')
 lines.push('')
 lines.push('> 由 `node scripts/gen-genoffice-inventory.mjs` 生成，请勿手改。')
-lines.push('> 判定口径与原因见 [`docx-pro-genoffice-audit.md`](./docx-pro-genoffice-audit.md)。')
+lines.push('> 判定口径与原因见 [`docx-genoffice-audit.md`](./docx-genoffice-audit.md)。')
 lines.push('')
 lines.push('## 怎么用')
 lines.push('')
@@ -361,7 +361,7 @@ lines.push('| 处置 | 数量 | 含义 |')
 lines.push('| --- | ---: | --- |')
 for (const c of ORDER) lines.push(`| \`${c}\` | ${count(c)} | ${DESC[c]} |`)
 lines.push('')
-lines.push('逐文件 CSV：[`docx-pro-genoffice-inventory.csv`](./docx-pro-genoffice-inventory.csv)')
+lines.push('逐文件 CSV：[`docx-genoffice-inventory.csv`](./docx-genoffice-inventory.csv)')
 lines.push('')
 for (const c of ORDER) {
   const list = (byCat.get(c) ?? []).sort((a, b) => a.path.localeCompare(b.path))

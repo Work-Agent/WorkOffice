@@ -122,7 +122,7 @@ export function buildCommandGuide(input: GuideInput): GuideResult {
       : '',
     '',
     '写入只允许在已打开的文档页执行；没有页面时 apply 直接拒绝。',
-    `用法：command docx-pro.apply，input.commands 是 JSON 字符串，例如 ${JSON.stringify([{ op: 'setText', index: 3, text: '新标题' }])}`,
+    `用法：command docx.apply，input.commands 是 JSON 字符串，例如 ${JSON.stringify([{ op: 'setText', index: 3, text: '新标题' }])}`,
     '下一步：guide({ group }) 取该组 schema；guide({ op }) 取单条。写前先 dryRun:true。',
   ]
     .filter((line) => line !== '')
@@ -185,7 +185,7 @@ function opGuide(header: string, op: string): GuideResult {
         action.description,
         'parameters:',
         JSON.stringify(action.parameters, null, 2),
-        '说明：动作按命令顺序执行，需要打开页面；结果只回 applied，需要内容时用 docx-pro.read。',
+        '说明：动作按命令顺序执行，需要打开页面；结果只回 applied，需要内容时用 docx.read。',
       ].join('\n'),
       data: { op: { name: action.name }, group: 'actions' },
     }

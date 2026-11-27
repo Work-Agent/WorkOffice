@@ -11,7 +11,7 @@ const check = (ok, message) => { if (!ok) problems.push(message) }
 
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const ws = pkg.workstudio ?? {}
-check(ws.id === 'docx-pro', `workstudio.id 必须是 docx-pro（当前 ${ws.id}）`)
+check(ws.id === 'docx', `workstudio.id 必须是 docx（当前 ${ws.id}）`)
 check(!ws.apiVersion, '不应再声明 apiVersion')
 check(pkg.exports?.['./workstudio'] === './dist/engine.js', "exports['./workstudio'] 必须是 ./dist/engine.js")
 for (const file of [ws.pages?.content, 'dist/engine.js', 'commands.json']) {
@@ -27,18 +27,18 @@ const commands = contribution?.commands ?? {}
 const staticCommands = JSON.parse(await readFile(join(root, 'commands.json'), 'utf8')).commands
 check(Object.keys(commands).length === staticCommands.length, 'commands.json 与动态命令数量不一致')
 for (const entry of staticCommands) check(Boolean(commands[entry.name]), `静态命令没有实现：${entry.name}`)
-for (const name of Object.keys(commands)) check(name.startsWith('docx-pro.'), `命令名必须以 docx-pro. 开头：${name}`)
-for (const name of ['docx-pro.guide', 'docx-pro.read', 'docx-pro.apply']) {
+for (const name of Object.keys(commands)) check(name.startsWith('docx.'), `命令名必须以 docx. 开头：${name}`)
+for (const name of ['docx.guide', 'docx.read', 'docx.apply']) {
   check(commands[name]?.expose?.agent === true, `${name} 应对助手可见`)
 }
-for (const name of ['docx-pro.saveAs', 'docx-pro.status']) {
+for (const name of ['docx.saveAs', 'docx.status']) {
   check(!commands[name], `不应存在 ${name}`)
 }
 
 const file = join(root, '.verify.docx')
 const ref = pathToFileURL(file).href
 await writeFile(file, buildDocx())
-const scope = { pluginId: 'docx-pro', events: { emit: () => {} }, log: console }
+const scope = { pluginId: 'docx', events: { emit: () => {} }, log: console }
 await contribution.lifecycle.activate(scope)
 const ctx = {
   fs: {
@@ -49,21 +49,21 @@ const ctx = {
   log: console,
 }
 try {
-  const guide = await commands['docx-pro.guide'].run({ ref }, ctx)
+  const guide = await commands['docx.guide'].run({ ref }, ctx)
   check(typeof guide === 'string' && guide.includes('blocks'), 'guide 没有返回命令目录')
-  const read = await commands['docx-pro.read'].run({ ref, what: 'context' }, ctx)
+  const read = await commands['docx.read'].run({ ref, what: 'context' }, ctx)
   check(typeof read === 'string' && read.includes('blocks='), 'read 没有返回块投影')
-  const loaded = await commands['docx-pro.load'].run({ ref }, ctx)
+  const loaded = await commands['docx.load'].run({ ref }, ctx)
   check(loaded?.bytes instanceof Uint8Array, 'load 没有返回 bytes')
   check(typeof loaded?.hash === 'string' && loaded.hash.length > 0, 'load 没有返回 hash')
   const createdFile = join(root, '.verify-created.docx')
   const createdRef = pathToFileURL(createdFile).href
-  const created = await commands['docx-pro.create'].run({ ref: createdRef }, ctx)
+  const created = await commands['docx.create'].run({ ref: createdRef }, ctx)
   check(created?.created === true, 'create 没有返回 created')
   check(Boolean(await stat(createdFile).catch(() => null)), 'create 没有落盘')
   let existsRejected = false
   try {
-    await commands['docx-pro.create'].run({ ref: createdRef }, ctx)
+    await commands['docx.create'].run({ ref: createdRef }, ctx)
   } catch (error) {
     existsRejected = /resource\.exists/.test(String(error?.message ?? error))
   }
@@ -71,13 +71,13 @@ try {
   await unlink(createdFile).catch(() => {})
   let rejected = false
   try {
-    await commands['docx-pro.apply'].run({ ref, commands: '[]' }, ctx)
+    await commands['docx.apply'].run({ ref, commands: '[]' }, ctx)
   } catch (error) {
     rejected = /command\.page-unavailable/.test(String(error?.message ?? error))
   }
   check(rejected, '无页面 apply 应返回 command.page-unavailable')
-  await commands['docx-pro.attach'].run({ ref, pageId: 'verify' }, ctx)
-  const saved = await commands['docx-pro.save'].run(
+  await commands['docx.attach'].run({ ref, pageId: 'verify' }, ctx)
+  const saved = await commands['docx.save'].run(
     { ref, pageId: 'verify', bytes: loaded.bytes, baseHash: loaded.hash, type: 'page' },
     ctx,
   )

@@ -1,4 +1,4 @@
-// ─── docx-pro engine：WorkStudio SDK 入口 ─────────────────────────────
+// ─── docx engine：WorkStudio SDK 入口 ─────────────────────────────
 //
 // 只做文档页：给定 ref 读 / 写当前文档；不做文件列表、新建、标签页。
 // Agent 的写一律通过页面队列；没有有效页面租约时拒绝，不后台写。
@@ -310,7 +310,7 @@ const resources: Record<string, ResourceAdapter> = {
 }
 
 const commands: Record<string, CommandDecl> = {
-  'docx-pro.guide': {
+  'docx.guide': {
     summary: 'Word 命令目录：无参分组，group 取组内 schema，op 取单条',
     args: {
       ref: { type: 'string', required: true },
@@ -327,7 +327,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.read': {
+  'docx.read': {
     summary: '读 Word 文档：context / blocks / comments / notes / revisions / styles / audit',
     args: {
       ref: { type: 'string', required: true },
@@ -360,7 +360,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.apply': {
+  'docx.apply': {
     summary: '在已打开的 Word 页面上执行一批命令（commands 为 JSON 字符串）；无页面直接拒绝',
     args: {
       ref: { type: 'string', required: true },
@@ -387,7 +387,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.create': {
+  'docx.create': {
     summary: '创建一个空白 Word 文件（seed 模板，不写正文）；创建后由宿主/用户打开页面再 apply',
     args: {
       ref: { type: 'string', required: true },
@@ -411,7 +411,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.load': {
+  'docx.load': {
     summary: '页面加载当前文档字节',
     args: {
       ref: { type: 'string', required: true },
@@ -435,7 +435,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.save': {
+  'docx.save': {
     summary: '页面保存当前 ref（页面唯一落盘点）',
     args: {
       ref: { type: 'string', required: true },
@@ -472,7 +472,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.attach': {
+  'docx.attach': {
     summary: '页面登记租约',
     args: {
       ref: { type: 'string', required: true },
@@ -501,7 +501,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.pending': {
+  'docx.pending': {
     summary: '页面取回待处理请求正文',
     args: { id: { type: 'string', required: true } },
     expose: { agent: false },
@@ -511,7 +511,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.report': {
+  'docx.report': {
     summary: '页面上报 live 版本',
     args: {
       ref: { type: 'string', required: true },
@@ -532,7 +532,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.detach': {
+  'docx.detach': {
     summary: '页面撤销租约',
     args: {
       ref: { type: 'string', required: true },
@@ -550,7 +550,7 @@ const commands: Record<string, CommandDecl> = {
     },
   },
 
-  'docx-pro.ack': {
+  'docx.ack': {
     summary: '页面回执，结算待处理请求',
     args: {
       id: { type: 'string', required: true },

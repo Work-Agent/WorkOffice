@@ -1,8 +1,8 @@
-# docx-pro 通讯协议与编辑时序
+# docx 通讯协议与编辑时序
 
-> 对象：`packages/docx-pro`（v1.0.4）
+> 对象：`packages/docx`（v1.0.4）
 > 依据：`src/engine/index.ts`、`src/page/main.ts`、`src/page/lease.ts`、`src/page/host.ts`、`commands.json`；
-> 宿主侧（preload / Dispatcher / DomainRegistry）不在本仓库，按 `docs/docx-pro-runtime.md`、`docs/docx-pro-remediation.md`、`docs/docx-plus-design.md` §2 的核对结论描述。
+> 宿主侧（preload / Dispatcher / DomainRegistry）不在本仓库，按 `docs/docx-runtime.md`、`docs/docx-remediation.md` 的核对结论描述。
 >
 > 本文只回答两件事：**谁发送、谁接收**；**Agent 编辑与人工编辑的时序**。
 
@@ -13,8 +13,8 @@
 | 角色 | 进程 | 说明 |
 | --- | --- | --- |
 | Agent | 外部 | 助手 / CLI，通过 `command` 工具调用插件命令 |
-| 页面 renderer | 渲染进程 | `plugin://docx-pro/content?ref=…`，GenOffice Docs 编辑器 fork |
-| 编辑器（PM） | 渲染进程 | 页面内实例，`window.__docxPro.getEditor()/getCtx()` 可取 |
+| 页面 renderer | 渲染进程 | `plugin://docx/content?ref=…`，GenOffice Docs 编辑器 fork |
+| 编辑器（PM） | 渲染进程 | 页面内实例，`window.__docx.getEditor()/getCtx()` 可取 |
 | 宿主 main | 主进程 | preload、Dispatcher、PluginManager、TransportRouter、WorkspaceFiles、DomainRegistry |
 | 插件引擎 | 主进程 | `dist/engine.js`，`definePlugin` 产物；**与宿主 main 同进程** |
 | 磁盘 `.docx` | — | 唯一持久化真相 |
@@ -53,7 +53,7 @@ interface WorkStudioBridge {
 
 | # | 方向 | 机制 | 具体通道 | 代码位置 |
 | --- | --- | --- | --- | --- |
-| ① | Agent → main | 工具调用（非 IPC） | `{domain:'docx-pro', action, input}` | Dispatcher |
+| ① | Agent → main | 工具调用（非 IPC） | `{domain:'docx', action, input}` | Dispatcher |
 | ② | main → 页面 | push | `workstudio:update` → `onUpdate` | `page/main.ts:32`、`page/lease.ts:178` |
 | ③ | 页面 → main | invoke | `workstudio:command` | `main.ts:50,102`、`host.ts`、`lease.ts` |
 | ④ | 页面 → main | invoke | `workstudio:subscribe` | `main.ts:26`、`lease.ts:59` |
@@ -61,7 +61,7 @@ interface WorkStudioBridge {
 | ⑥ | 页面 → main | invoke | `workstudio:file-token` | 未使用 |
 | ⑦ | main → 插件 | 动态 `import` | `exports['./workstudio']` → `dist/engine.js` | `scripts/build.mjs` |
 | ⑧ | 插件 ↔ 磁盘 | 函数调用 | `ctx.fs.read/write`；adapter 直接 `node:fs` | `engine/index.ts`、`engine/read.ts` |
-| ⑨ | 页面 ↔ 编辑器 | 同进程 | `window.__docxPro`、`window.desktop` | `page/lease.ts`、`page/host.ts` |
+| ⑨ | 页面 ↔ 编辑器 | 同进程 | `window.__docx`、`window.desktop` | `page/lease.ts`、`page/host.ts` |
 
 ---
 
@@ -71,7 +71,7 @@ interface WorkStudioBridge {
 
 | 谁发送 | 谁接收 | 发送什么 | 通道 | 时机 |
 | --- | --- | --- | --- | --- |
-| 页面 | main | `command('docx-pro','docx-pro','load',{ref})` | invoke | 启动，取字节 |
+| 页面 | main | `command('docx','docx','load',{ref})` | invoke | 启动，取字节 |
 | 页面 | main | `command(…,'attach',{ref,pageId})` | invoke | 启动，登记租约 |
 | 页面 | main | `command(…,'pending',{id})` | invoke | 收到 `request` 事件后取正文 |
 | 页面 | main | `command(…,'save',{ref,pageId,bytes,baseHash,type})` | invoke | 人工保存 / Agent 批次落盘 |
@@ -79,9 +79,9 @@ interface WorkStudioBridge {
 | 页面 | main | `command(…,'ack',{id,ok,payload})` | invoke | 处理完 Agent 请求 |
 | 页面 | main | `command(…,'detach',{ref,pageId})` | invoke | `pagehide` |
 | main | 页面 | 上述每条命令的返回值 `{ok,data}` / `{ok,error}` | invoke resolve | 紧接每条命令 |
-| 页面 | main | `subscribe('docx-pro','events')` | invoke | 启动一次，无回调 |
+| 页面 | main | `subscribe('docx','events')` | invoke | 启动一次，无回调 |
 | 页面 | main | `subscribe('shell','appearance')` | invoke | 启动一次，返回当前主题快照 |
-| main | 页面 | `{domain:'docx-pro',resource:'events',type:'event',event:'request',data:{id,type}}` | `workstudio:update` | Agent 调 `read`/`apply` 且页面有租约 |
+| main | 页面 | `{domain:'docx',resource:'events',type:'event',event:'request',data:{id,type}}` | `workstudio:update` | Agent 调 `read`/`apply` 且页面有租约 |
 | main | 页面 | `{domain:'shell',resource:'appearance',type:'snapshot'\|'patch',data:{theme}}` | `workstudio:update` | 用户切主题 |
 
 **订阅要拆成两条看**：`subscribe` 是页面 → main 的一次登记（有返回值）；`workstudio:update` 是 main → 页面的持续投递。`onUpdate` 不是发送方，它是页面里接收后者的监听器。
@@ -90,7 +90,7 @@ interface WorkStudioBridge {
 
 | 谁发送 | 谁接收 | 发送什么 | 方式 |
 | --- | --- | --- | --- |
-| Agent | Dispatcher | `command({domain:'docx-pro', action:'guide'\|'read'\|'apply', input})` | 工具调用 |
+| Agent | Dispatcher | `command({domain:'docx', action:'guide'\|'read'\|'apply', input})` | 工具调用 |
 | Dispatcher | 插件 `run(input, ctx)` | 命令参数 + `ctx`（`fs.read/write`、`changed`、`log`） | 函数调用 |
 | 插件 | Dispatcher | 返回值 / 抛 `code: message` | Promise |
 | Dispatcher | 页面 | 命令返回值（经 invoke 回程） | 见 3.1 |
@@ -167,7 +167,7 @@ sequenceDiagram
     participant E as 插件引擎
     participant D as 磁盘 .docx
 
-    A->>M: command(domain=docx-pro, action=apply, input={ref, commands, baseHash?, docRev?, dryRun?})
+    A->>M: command(domain=docx, action=apply, input={ref, commands, baseHash?, docRev?, dryRun?})
     M->>E: run(input, ctx)   // expose.agent=true
     E->>E: JSON.parse(commands)，必须是数组，≤200 条
     alt 无租约
@@ -179,7 +179,7 @@ sequenceDiagram
     else 校验通过，入队
         E->>E: id=uuid()，pending.set(id,{resolve,reject,30s})
         E->>M: scope.events.emit('request', {id, type:'apply'})
-        M-->>P: workstudio:update {domain:'docx-pro',resource:'events',event:'request',data:{id}}
+        M-->>P: workstudio:update {domain:'docx',resource:'events',event:'request',data:{id}}
         P->>M: invoke command('pending', {id})
         M->>E: run({id})
         E-->>M: entry.request {commands, baseHash, docRev, dryRun}
@@ -334,4 +334,4 @@ sequenceDiagram
 | 无 dirty 上报 | `host.ts` 的 `bus.send` 是空实现 | 标签脏点由宿主承担，插件无法通知 |
 | 文档声称“每个 ref 一把写锁” | `engine/index.ts` 只有 `baseHash` CAS，无互斥 | 同页面并发 `save` 可交错，只能事后 `stale` |
 | 文档提到 `flush` 与 `already-open` | 代码 `PageRequest` 只有 `apply \| read`；第二个 `attach` 是接管 | 文档与实现不一致 |
-| 编辑器就绪靠 200ms 轮询 | `lease.ts` `setInterval` 查 `window.__docxPro` | `attach` 成功但编辑器未挂载的窗口只能靠 `page-unavailable` 兜底 |
+| 编辑器就绪靠 200ms 轮询 | `lease.ts` `setInterval` 查 `window.__docx` | `attach` 成功但编辑器未挂载的窗口只能靠 `page-unavailable` 兜底 |

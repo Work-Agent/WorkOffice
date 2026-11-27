@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// docx-pro 构建：esbuild 引擎 → workstudio-plugin 等价的 commands.json → vite 页面。
+// docx 构建：esbuild 引擎 → workstudio-plugin 等价的 commands.json → vite 页面。
 import { build } from 'esbuild'
 import { copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'

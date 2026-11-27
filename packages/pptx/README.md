@@ -28,7 +28,7 @@ WorkStudio SDK 文档页插件：完整 GenOffice Slides 编辑器跑在 `plugin
 
 ```text
 src/
-├─ engine/index.ts     definePlugin：adapter + 13 命令 + events + lifecycle（单文件，同 docx-pro）
+├─ engine/index.ts     definePlugin：adapter + 13 命令 + events + lifecycle（单文件，同 docx）
 ├─ engine/{read,check,create,build,images,abi}.ts
 ├─ page/{main,host,channel,lease,env.d.ts,index.html}
 ├─ shared/             与页面共用的纯逻辑（deck / read / check / spec / ops / design / …）

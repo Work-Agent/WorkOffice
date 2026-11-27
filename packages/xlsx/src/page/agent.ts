@@ -38,7 +38,7 @@ const MAX_READ_CELLS = 2_000
 type AnyRecord = Record<string, unknown>
 
 function editor(): EditorHandle | null {
-  return (window.__xlsxPro as EditorHandle | undefined) ?? null
+  return (window.__xlsxEditor as EditorHandle | undefined) ?? null
 }
 
 /** 请求可能早于 App 的 effect 到达：最多等 5 s。 */
@@ -166,7 +166,7 @@ async function handleRequest(
       .report({ hash: bridge.hash(), docRev: handle.docRev(), structureEpoch: handle.structureEpoch(), dirty: false })
       .catch(() => undefined)
 
-    const receipt = window.__xlsxProHost?.getReceipt?.() as
+    const receipt = window.__xlsxHost?.getReceipt?.() as
       | { ref?: string; hash?: string; size?: number; at?: number }
       | null
     await ack(true, {

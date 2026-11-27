@@ -3571,7 +3571,7 @@ export function App({
   }, [])
   useEffect(() => {
     const handlers = mcpSheetHandlersRef
-    window.__xlsxPro = {
+    window.__xlsxEditor = {
       hasWorkbook: () => handlers.current?.hasWorkbook() ?? false,
       context: () => handlers.current?.context(),
       readCells: (addresses: string[], sheetId?: string) =>
@@ -3599,7 +3599,7 @@ export function App({
       undoDepth: () => undoStackDepth(univerRef.current),
     }
     return () => {
-      delete window.__xlsxPro
+      delete window.__xlsxEditor
     }
   }, [])
   /// Re-renders the floating visuals after a journal mutation (edits and

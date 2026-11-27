@@ -2066,10 +2066,10 @@ export function App() {
       setDocPwdPrompt({ path: info.path, name: info.name, value: '', errorKey: '', busy: false }),
   }
 
-  // ─── docx-pro 页面桥 ─────────────────────────────────────────────────
+  // ─── docx 页面桥 ─────────────────────────────────────────────────
   // 计划型写需要两个句柄：live 编辑器（agent 事务）与纯序列化入口
   // （buildDocBytes，不改变任何状态）。全局名只在本插件页面里使用。
-  ;(window as unknown as { __docxPro?: unknown }).__docxPro = {
+  ;(window as unknown as { __docx?: unknown }).__docx = {
     getCtx: () => fileCtxRef.current,
     getEditor: () => fileCtxRef.current.editor,
     serialize: () => buildDocBytes(fileCtxRef.current),

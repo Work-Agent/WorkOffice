@@ -18,7 +18,7 @@
 
 ## 0. 一页结论
 
-改造分三层，边界和现有 `docx-pro` / `xlsx` / `pptx` 完全一致：
+改造分三层，边界和现有 `docx` / `xlsx` / `pptx` 完全一致：
 
 ```text
 宿主主进程（engine，可 import node:）
@@ -287,7 +287,7 @@ packages/pdf/
   `pdf.chunk` 直接切片；缓存 1–2 份、上限 160 MB，避免重复读盘；
 - `hash` 作为版本令牌：`chunk` 时如果缓存被换出，重新读盘并比对；
   不一致就回 `command.stale`，页面提示重新打开；
-- `base64` 是 IPC 不保留 `Uint8Array` 时的退路（`docx-pro.load` 已有同样处理）；
+- `base64` 是 IPC 不保留 `Uint8Array` 时的退路（`docx.load` 已有同样处理）；
   大文件按块 base64，单块膨胀可接受。
 
 ### 4.4 `pdf.saveCopy`
@@ -716,7 +716,6 @@ tests/ura.test.mjs
 | --- | --- |
 | `scripts/verify-contract.mjs` | 从 URA 列表移除 `pdf`（PDF 不再有 `dist/ura.js`） |
 | `package.json` | `build:pdf` 保留；加 `verify:pdf`；`test:pdf` 改为 `node scripts/build.mjs --engine-only && node --test tests/*.test.mjs`，本地不依赖全量 build |
-| `.github/workflows/ci.yml` | 用 `pnpm --filter @workstudio/plugin-pdf verify` 替代 URA 校验里的 PDF |
 | `docs/architecture.md` | 代际表加 `pdf`；§3 加 PDF 映射；§7 能力边界更新 |
 | `README.md` | 插件表加 `pdf` 行（只读查看器 + agent 读） |
 
@@ -861,7 +860,7 @@ pdf.apply { ref, ops, baseHash? }
 
 ## 附：与现有 SDK 插件的对照
 
-| 能力 | `docx-pro` | `xlsx` | `pptx` | `pdf`（本方案） |
+| 能力 | `docx` | `xlsx` | `pptx` | `pdf`（本方案） |
 | --- | --- | --- | --- | --- |
 | 页面租约 | 有 | 有 | 有 | 无（只读） |
 | 页面队列 | `attach/pending/ack` | gateway / 页面事务 | `attach/pending/ack` | 无 |

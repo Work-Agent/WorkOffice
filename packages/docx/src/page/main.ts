@@ -1,4 +1,4 @@
-// ─── docx-pro 页面入口（WorkStudio SDK） ───────────────────────────────
+// ─── docx 页面入口（WorkStudio SDK） ───────────────────────────────
 //
 // 页面只做：取 ref → 取字节 → 装 window.desktop 适配层 → 启动编辑器
 // → 登记页面租约 → 处理 Agent 请求 / 保存回执。
@@ -47,13 +47,13 @@ async function waitForEditor(): Promise<void> {
 }
 
 async function loadDocument(ref: string): Promise<LoadResult> {
-  const result = await window.workStudio.command<LoadResult>('docx-pro', 'docx-pro', 'load', {
+  const result = await window.workStudio.command<LoadResult>('docx', 'docx', 'load', {
     ref,
   })
   if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
   if (result.data.bytes instanceof Uint8Array) return result.data
   // 极端情况下 invoke 没有保留 typed array：退到 base64。
-  const fallback = await window.workStudio.command<LoadResult>('docx-pro', 'docx-pro', 'load', {
+  const fallback = await window.workStudio.command<LoadResult>('docx', 'docx', 'load', {
     ref,
     base64: true,
   })
@@ -100,8 +100,8 @@ async function boot(): Promise<void> {
     const queue = installPageQueue({ ref, pageId, host, locator })
 
     const attached = await window.workStudio.command<{ pending?: PageRequest[] }>(
-      'docx-pro',
-      'docx-pro',
+      'docx',
+      'docx',
       'attach',
       { ref, pageId },
     )

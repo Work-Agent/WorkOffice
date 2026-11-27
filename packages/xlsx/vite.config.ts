@@ -18,7 +18,7 @@ export default defineConfig({
   plugins: [viteGenoffice()],
   resolve: {
     alias: [
-      // 页面里没有 Node：gateway 的少数 node: 依赖走浏览器 shim（与旧 xlsx-pro 同一套）。
+      // 页面里没有 Node：gateway 的少数 node: 依赖走浏览器 shim（与历史 xlsx 实现同一套）。
       { find: /^node:crypto$/, replacement: join(here, 'src/editor/shims/node-crypto.ts') },
       { find: /^node:fs\/promises$/, replacement: join(here, 'src/editor/shims/node-fs-promises.ts') },
       { find: /^node:fs$/, replacement: join(here, 'src/editor/shims/node-fs.ts') },

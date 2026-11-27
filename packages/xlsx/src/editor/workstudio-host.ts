@@ -330,7 +330,7 @@ export async function installWorkStudioHost(options: HostOptions): Promise<void>
     if (readFallbackWarned) return
     readFallbackWarned = true
     console.warn(
-      `[xlsx-pro] 引擎范围读取不可用（${what}），回退到本地解析：`,
+      `[xlsx] 引擎范围读取不可用（${what}），回退到本地解析：`,
       error instanceof Error ? error.message : error,
     )
   }
@@ -449,7 +449,7 @@ export async function installWorkStudioHost(options: HostOptions): Promise<void>
     try {
       options.data.sheets = parseWorkbook(bytes)
     } catch (error) {
-      console.warn('[xlsx-pro] 保存后解析工作簿失败，range 仍使用旧快照', error)
+      console.warn('[xlsx] 保存后解析工作簿失败，range 仍使用旧快照', error)
     }
     const sha256 = await digest(bytes)
     currentFile = {
@@ -661,7 +661,7 @@ export async function installWorkStudioHost(options: HostOptions): Promise<void>
       try {
         options.data.sheets = parseWorkbook(currentBytes)
       } catch (error) {
-        console.warn('[xlsx-pro] 保存后解析工作簿失败，range 仍使用旧快照', error)
+        console.warn('[xlsx] 保存后解析工作簿失败，range 仍使用旧快照', error)
       }
       const sha256 = await digest(currentBytes)
       currentFile = {
@@ -743,7 +743,7 @@ export async function installWorkStudioHost(options: HostOptions): Promise<void>
   }
 
   ;(window as unknown as { desktopApi: unknown }).desktopApi = api
-  ;(window as unknown as { __xlsxProHost?: unknown }).__xlsxProHost = {
+  ;(window as unknown as { __xlsxHost?: unknown }).__xlsxHost = {
     getVersion: () => version,
     getEpoch: () => epoch,
     getReceipt: () => lastReceipt,

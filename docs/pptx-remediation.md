@@ -1,10 +1,10 @@
 # pptx 整改方案（WorkStudio 新插件框架 · 就地改造）
 
-> 依据：`docs/docx-pro-remediation.md` 的同一套做法，以及 `@work-studio/sdk`（当前宿主 0.3.3 / SDK 0.2.0）。
+> 依据：`docs/docx-remediation.md` 的同一套做法，以及 `@work-studio/sdk`（当前宿主 0.3.3 / SDK 0.2.0）。
 >
 > **只改 `packages/pptx`，不改 WorkStudio 宿主、不改 SDK。**
 > 包 id 仍是 `pptx`，清单从 `apiVersion: 2` 换成 `pages + claims + skills`，
-> 目录结构对齐 `packages/docx-pro`。
+> 目录结构对齐 `packages/docx`。
 
 ---
 
@@ -44,7 +44,7 @@
 
 - 传输支持 `Uint8Array`（structured clone）；`ArgSpec` 没有 `bytes` 只影响描述，不影响运行时。
 - 命令地址是 `<domain>/<resource>/<action>`，插件固定为 `pptx/pptx/<action>`；
-  引擎里用 `'pptx.<action>'` 作 key（宿主按第一个 `.` 切出 action，与 docx-pro 一致）。
+  引擎里用 `'pptx.<action>'` 作 key（宿主按第一个 `.` 切出 action，与 docx 一致）。
 - 根目录 `commands.json` 必填，且与引擎命令 key **双向**对齐（`mergeStaticCommands` 会报错）。
 - 插件页只能调自己域 + `shell/native.saveFile|openExternal`；`shell/<ws>/views`、`workspace/*` 不可订。
 - 助手来源能否调页面命令只由 `expose.agent` 决定；`save` 必须 `expose.agent: false`。
@@ -76,7 +76,7 @@
 - `icon` 只认宿主 `icons.ts` 里的 18 个名字（`file-text`/`list`/`eye`…）；`presentation`、`table` 不在表里，会退化成 `Package` 图标。
 - 迁移期与旧 `pptx` 冲突，`claims.priority: 100` + 卸载旧包。
 
-### 3.2 目录结构（对齐 docx-pro，已落盘）
+### 3.2 目录结构（对齐 docx，已落盘）
 
 ```text
 packages/pptx/
@@ -105,9 +105,9 @@ packages/pptx/
 删除的旧文件：`src/ura.ts`、`src/ura-types.ts`、`src/sdk.ts`、`src/types/raw.d.ts`、
 `src/engine/{plan,exec,state,runtime,tools}.ts`、`src/page/agent.ts`。
 
-与 docx-pro 的对应关系：
+与 docx 的对应关系：
 
-| docx-pro | pptx |
+| docx | pptx |
 | --- | --- |
 | `src/engine/index.ts`（600 行，单文件） | 同形，约 700 行 |
 | `src/engine/read.ts` | 保留 + 复用 `shared/read.ts` |
@@ -201,7 +201,7 @@ type AckPayload = { receipt?: SaveReceipt; data?: unknown; error?: { code: strin
 
 ### 4.4 字节通道
 
-- `load` 一次返回整份 `Uint8Array`；上限 **64 MB**（docx-pro 16 MB；pptx 带媒体，包更大）。
+- `load` 一次返回整份 `Uint8Array`；上限 **64 MB**（docx 16 MB；pptx 带媒体，包更大）。
 - `save` 一次提交整份字节；上限同样 64 MB；超限 `command.too-large`。
 - **不分块**：`saveBegin/saveChunk/saveCommit` 与 `open/chunk` 全部不做（上一版抄 xlsx-plus 的分块是多余复杂度）。
 - 校验：ZIP 魔数 `PK\x03\x04`、包内必须有 `[Content_Types].xml`、`ppt/presentation.xml`、体积匹配。
@@ -315,7 +315,7 @@ src/page/agent.ts
 | P3 | `apply` 队列 + `pending/ack` + 页面事务 + `docRev`；无页面拒绝 | 3–4 |
 | P4 | `create` / `saveAs` / 自动保存 / tests / verify / 打包 | 3–4 |
 
-合计 **12–17 人日**（docx-pro 当时估 14–19）。
+合计 **12–17 人日**（docx 当时估 14–19）。
 
 **P0 退出**：打开 40 页 deck 可翻页；`commands.json` 与引擎对齐；无 `ura.*`。
 **P2 退出**：改文字/拖元素/增删页 → 保存 → 重开一致；外部改动后保存报 `command.stale`。
@@ -374,7 +374,7 @@ src/page/agent.ts
 | `savePptx` 在页面里可用 | ✅ 已确认：`vendor/.../pptx-engine/src/index.ts:746`；`node:crypto`/`node:zlib` 已由 `src/editor/shims` 别名替换 | P0 实测 40 页 deck 保存往返 |
 | `runTxn` 回滚 | ✅ 已确认：`pptx-ops/src/ops/executor.ts:160`，atomic 默认，内部快照回滚 | 页面侧再包一层 `history.push` 保证一个 undo 步 |
 | 上传/下载上限 | docx 16 MB；pptx 需更大 | 定 64 MB；超限拒绝而非分块 |
-| 另存为 | docx-pro 判为宿主职责 | pptx 保留 `saveAs`（页面已有字节、宿主已有 `saveFile`），放 P3 |
+| 另存为 | docx 判为宿主职责 | pptx 保留 `saveAs`（页面已有字节、宿主已有 `saveFile`），放 P3 |
 | 大图/媒体插入 | `engine/images.ts` 走引擎；页面侧需 `media-insert` | P2 检查 `node:zlib` shim 是否覆盖 `deflateSync` 路径 |
 | 页面忙时 apply | 拖动中 | `flushActiveEdit()` 后提交；P3 实测 |
 | `powerpoint` 之外的扩展名 | pptm/potx | claims 声明三个；`create` 只产 `.pptx` |
@@ -399,9 +399,9 @@ src/page/agent.ts
   `.sha256`；zip 内只有精简清单、`dist/`、`commands.json`、`api.*`、`skills/`。
   已实测：解包 → 安装到临时目录 → `import` 安装后的 `dist/engine.js` → `pptx.load` 跑通。
 
-与 docx-pro 的偏差（都写在 §10）：
+与 docx 的偏差（都写在 §10）：
 
-| 点 | docx-pro | 本轮 pptx | 原因 |
+| 点 | docx | 本轮 pptx | 原因 |
 | --- | --- | --- | --- |
 | `saveAs` | 不做（判给宿主） | **做了**（`saveFile` token → 写工作区内） | 页面已有整份字节，成本只有 8 行；跨盘仍 `denied` |
 | `check` | 折进 `read what:'audit'` | **独立命令** | pptx 的 check 要吃 outline/pages 做断言，参数形状与读不同 |

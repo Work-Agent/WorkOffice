@@ -74,7 +74,8 @@ for (const id of pluginIds) {
   const pkgRoot = join(root, 'packages', id)
   const pkg = JSON.parse(await readFile(join(pkgRoot, 'package.json'), 'utf8'))
   const ws = pkg.workstudio ?? {}
-  if (ws.id !== id) throw new Error(`${id}: workstudio.id 必须为 "${id}"`)
+  // 目录名只是组织方式：产物名与安装目录一律取清单里的 workstudio.id。
+  if (!ws.id) throw new Error(`${id}: 缺少 workstudio.id`)
   if (!pkg.version) throw new Error(`${id}: 缺少 version`)
   const sdkEntry = pkg.exports?.['./workstudio']
   if (sdkEntry) {
@@ -151,7 +152,7 @@ for (const id of pluginIds) {
   }
 
   const zip = zipSync(entries, { level: 6 })
-  const base = `${id}-${pkg.version}${tag ? `-${tag}` : ''}`
+  const base = `${ws.id}-${pkg.version}${tag ? `-${tag}` : ''}`
   const zipPath = join(release, `${base}.zip`)
   await writeFile(zipPath, zip)
   const sha256 = createHash('sha256').update(zip).digest('hex')

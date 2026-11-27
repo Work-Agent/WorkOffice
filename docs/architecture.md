@@ -10,13 +10,12 @@
 >
 > | 代际 | 包 | 页面 / 写 |
 > | --- | --- | --- |
-> | URA（apiVersion 1/2） | 旧 `docx` / `xlsx` / `pptx`（见 `legacy/`） | `window.extension.ura.page.*` + `codec / presenter / sidecar` + `plan` 写 |
-> | SDK（`definePlugin`） | `docx-pro` `pptx` `xlsx` `pdf` | `window.workStudio.command/subscribe/onUpdate`，写是命令；**没有** `ura.page` / `window.extension` |
+> | URA（apiVersion 1/2，已删除） | 旧 `docx` / `xlsx` / `pptx` | `window.extension.ura.page.*` + `codec / presenter / sidecar` + `plan` 写 |
+> | SDK（`definePlugin`） | `docx` `pptx` `xlsx` `pdf` | `window.workStudio.command/subscribe/onUpdate`，写是命令；**没有** `ura.page` / `window.extension` |
 >
-> `docx-pro`、`pptx`、`xlsx`、`pdf` 统一为版本 `0.2.0`，均已就地改造成 SDK 文档页插件，见
-> [`docx-pro-remediation.md`](./docx-pro-remediation.md) 与 [`pptx-remediation.md`](./pptx-remediation.md)。
-> 其余新实现见 [`xlsx-design.md`](./xlsx-design.md)、[`docx-plus-design.md`](./docx-plus-design.md)、
-> [`pdf-design.md`](./pdf-design.md)；已弃用代际的历史文档收在 [`legacy/`](./legacy/README.md)。
+> `docx`、`pptx`、`xlsx`、`pdf` 统一为版本 `0.2.0`，均已就地改造成 SDK 文档页插件，见
+> [`docx-remediation.md`](./docx-remediation.md) 与 [`pptx-remediation.md`](./pptx-remediation.md)。
+> 其余新实现见 [`xlsx-design.md`](./xlsx-design.md)、[`pdf-design.md`](./pdf-design.md)。
 
 ---
 
@@ -237,7 +236,7 @@ DOCX bytes
 | 部件 | 来源 | 我们怎么用 |
 | --- | --- | --- |
 | 文档解析 / 写回 | `@genoffice/docx-engine` | 原样复用 |
-| 编辑器 | GenOffice Docs `apps/docs/src/renderer` | fork 到 `packages/docx/src/editor`；`docx-pro` 再复制一份到自己的 `src/editor` |
+| 编辑器 | GenOffice Docs `apps/docs/src/renderer` | fork 到 `packages/docx/src/editor`（仓库里只有这一份） |
 | 页面宿主 | GenOffice main/preload | 替换为 `packages/docx/src/page` |
 | AI | `apps/docs/src/ai` | 页面入口移除；源码尚未完全清理 |
 
@@ -522,44 +521,29 @@ AI 不是用 CSS 隐藏，而是从页面层删掉：
 
 ---
 
-## 5.7 合体版：`docx-pro`（完整编辑器 + 计划型写）
+## 5.7 `docx`：完整编辑器 + 块命令引擎
 
-`packages/docx` 与 `packages/office-docx` 各占一半：前者是完整编辑器（字节权威
-在 ProseMirror 序列化器），后者是计划型写协议（字节权威在块级 XML 切片）。
-宿主把写形态做成**每插件单值**（`page-sessions.commit` 用同一个 `writeModeOf`
-裁决 `bytes` 与 `plan`），所以合体不能靠“装两个插件”，只能让页面也交计划。
-
-`docx-pro` 的做法：
+只有一个 `docx` 插件（id 与目录名一致），编辑器与块命令引擎在同一个包里：
 
 ```text
-                     ┌─ 有页面：PM 事务 → 编辑器 save() → serialize
-plan { kind: 'bytes' } ┘                        ↘
-                                                  exec → 权威层 CAS → 落盘
-plan { kind: 'save' }  ── 无页面：块级 XML 切片 ──↗
+助手 ── command('docx','docx.apply',{ ref, commands }) ──► 页面队列
+                                                        │
+页面（GenOffice Docs 编辑器 fork）── PM 事务 ──► docx.save ──► 字节 → 宿主落盘
+无页面 ──► engine 直接按块级 XML 切片回答读类命令；apply 直接拒绝
 ```
 
-- `write: 'plan'` + `engine.{tools,plan,exec,read,runtime}`；
-- 编辑器源码从 `packages/docx/src/editor` **复制**进 `src/editor`（插件之间不互相
-  import），只换宿主适配层的保存函数：
-  `saveBytes` → `commit({ payload: { type: 'plan', plan: { kind: 'bytes', bytes } } })`；
-- 无页面时 `engine.plan` 用与 `office-docx` 同一套块命令产 `{ kind: 'save' }`，
-  `engine.exec` 只重写 `word/document.xml`，其余 zip 条目逐字节拷贝；
-- 读类工具只能在执行点（宿主不把 `readOnly` 工具交给页面代理），因此
-  `get_document_context` / `read_blocks` / 读批注与修订都从字节侧回答——代价是
-  拿不到“当前选区”，SKILL 里明确要求用块索引定位；
-- 工具面只有三个：`docx_guide`（目录）/ `docx_read`（读）/ `docx_apply`（命令批），
-  目录里 41 条命令（blocks 8 · editor 23 · actions 10）。需要页面的 op 由页面代理执行，
-  无页面时回 `command.page-unavailable`，不回退 headless 写第二份模型。
-
-三者的取舍：
-
-| 插件 | 写形态 | 页面 | 适合 |
-| --- | --- | --- | --- |
-| `docx` | `bytes` | 完整编辑器 | 纯人工编辑 |
-| `office-docx` | `plan` | 块列表 | 纯后台/批处理 |
-| `docx-pro` | `plan` | 完整编辑器 | 人在场 + agent 同一份文档 |
-
-三者声明同一 MIME：**同一工作区只能启用一个**。
+- 清单：`exports['./workstudio']`、`workstudio.pages.content`、`claims(docx/docm/dotx, 100)`、
+  `skills/docx`；没有 `apiVersion` / `write` 字段，也没有 `ura` 入口；
+- 11 个命令：`guide` / `read` / `create` / `apply` + 页面 `load` / `save` +
+  租约 `attach` / `pending` / `report` / `detach` / `ack`；
+- 写：`apply` 只入页面队列，页面 PM 事务落地后由 `save` 落盘；无页面时
+  `command.page-unavailable`，不回退 headless 写第二份模型；
+- 读：有页面读 live 编辑器；无页面由 engine 按块级 XML 切片回答
+  `context` / `blocks` / `comments` / `notes` / `revisions` / `styles` / `audit`；
+  代价是拿不到“当前选区”，SKILL 里要求用块索引定位；
+- 目录 41 条 op：blocks 8 · editor 23 · actions 10；需要页面的 op 由页面代理执行；
+- `create` 只产空白 seed，不写正文；目标已存在直接 `invalid`；
+- 保存时 `baseHash` 不一致返回 `command.stale`，外部修改不会被静默覆盖。
 
 ---
 
@@ -567,13 +551,13 @@ plan { kind: 'save' }  ── 无页面：块级 XML 切片 ──↗
 
 只要下面这些成立，改造就不会退回“手写精简 Office”：
 
-1. **文件字节只走 `ura.page.saveBytes`**；页面不写路径。
+1. **文件字节只由页面命令写回**（`<id>.save`）；宿主与 agent 都不直接写字节，页面不碰路径。
 2. **渲染层不直接读文件系统**；所有数据来自页面会话。
 3. **模型修改必须走操作层**：PPTX `runTxn`，XLSX gateway / Univer mutation，DOCX transaction。
 4. **保存映射必须完整**：XLSX 使用完整 `planCellEditsToXlsx` 参数，不能调用丢字段的旧包装。
 5. **一次手势一个撤销单元**：预览合并、保存后重开、id 刷新都要围绕这个原则。
 6. **AI 循环不进入页面**：模型调用与工具编排由 WorkStudio 助手承担；页面只提供
-   领域工具的执行体（`docx-pro` 的 3 个工具 / 41 条命令 + 页面代理），不挂聊天面板、
+   领域工具的执行体（`docx` 的 11 个命令 / 41 条 op + 页面代理），不挂聊天面板、
    不 import agent/provider 包。
 7. **renderer 的差异集中在 host adapter**：不要在每个组件里写 WorkStudio 分支。
 8. **typecheck 覆盖 renderer**：`src/editor` / `src/shared` 不能靠 `tsconfig` 排除来“通过”。
@@ -584,8 +568,7 @@ plan { kind: 'save' }  ── 无页面：块级 XML 切片 ──↗
 
 | 格式 | 已有 | 边界 |
 | --- | --- | --- |
-| DOCX | 打开、编辑、分页、Ribbon、审阅、保存 | 上游同步与部分 WorkStudio 系统命令仍待补 |
-| DOCX（`docx-pro`） | 同上 + 3 个工具 / 41 条命令 + 无页面块命令 | 页面路径 `maxCommitBytes` 16 MB；无页面无选区；批注/页脚/页面设置等 15 个动作未接线 |
+| DOCX（`docx`） | 打开、编辑、分页、Ribbon、审阅、保存 + 11 个命令 / 41 条 op + 无页面块命令 | 上游同步与部分 WorkStudio 系统命令仍待补；无页面无选区；批注/页脚/页面设置等 15 个动作未接线 |
 | XLSX | Ribbon、网格、公式、选择、格式、查找、筛选、透视、图表、保存 | 大文件/公式流式仍按页面内加载策略处理 |
 | PPTX | Ribbon、画布、原位文本、变换、幻灯片/节、表格/图表、图片/媒体、动画、录音、母版、脱敏、放映、PDF、保存 | 观众窗口是 Document PiP；自动第二屏全屏/交换显示器受浏览器权限限制 |
 | PDF | 真字节渲染、大纲、缩略图、搜索、链接、打印、另存副本；`pdf.read` / `grep` 读元数据与页文本 | 只读；扫描件无文本层；打印是栅格；加密 PDF 的 agent 文本读取需页面解锁 |
@@ -653,7 +636,8 @@ WorkStudio 的插件装载是新机制：
 - 安装后重启 WorkStudio 才装载；安装时不执行 npm install。
 
 发布由 `.github/workflows/release.yml` 完成：推送 `v*` tag 后，在
-GitHub Actions 中构建、打包、生成 sha256，创建 GitHub Release。普通分支/PR 由 `.github/workflows/ci.yml` 构建并上传 artifact。
+GitHub Actions 中校验版本、构建、打包、生成 sha256，创建 GitHub Release，并把
+`plugins/<id>.json` 写进 WorkStudio PluginRegistry 开 PR。仓库不跑分支/PR 的 CI。
 
 运行态最低验收：
 
